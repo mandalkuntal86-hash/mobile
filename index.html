@@ -8,37 +8,37 @@
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#F1EEE3;
+    --bg:#EAF1FB;
     --surface:#FFFFFF;
-    --ink:#1C2620;
-    --ink-soft:#5B6660;
-    --line:#E1DCCA;
-    --accent:#C05B24;
-    --accent-2:#B8862F;
+    --ink:#152238;
+    --ink-soft:#5C7089;
+    --line:#DCE6F5;
+    --accent:#2563EB;
+    --accent-2:#0891B2;
     --accent-ink:#FFFFFF;
-    --accent-soft:#FBE9DD;
-    --info:#2D6E8E;
-    --info-bg:#E3EEF3;
-    --good:#2F6F4F;
-    --good-bg:#E4EFE7;
-    --bad:#B23A3A;
-    --bad-bg:#F6E4E1;
-    --side-bg:#122019;
-    --side-bg-2:#182b23;
-    --side-ink:#E9E6D8;
-    --side-ink-dim:#8FA69A;
-    --side-active:#213a30;
+    --accent-soft:#DCEAFE;
+    --info:#0E7490;
+    --info-bg:#E1F3F8;
+    --good:#15803D;
+    --good-bg:#E1F4E7;
+    --bad:#C0334A;
+    --bad-bg:#FBE4E9;
+    --side-bg:#0A1E42;
+    --side-bg-2:#122c5c;
+    --side-ink:#E7EEFC;
+    --side-ink-dim:#8CA3C9;
+    --side-active:#1D3E78;
     --radius:10px;
     --radius-sm:6px;
-    --shadow:0 1px 2px rgba(28,38,32,.05), 0 6px 16px rgba(28,38,32,.05);
-    --shadow-lift:0 10px 26px rgba(28,38,32,.10), 0 2px 6px rgba(28,38,32,.06);
+    --shadow:0 1px 2px rgba(21,34,56,.06), 0 6px 18px rgba(21,34,56,.06);
+    --shadow-lift:0 10px 28px rgba(21,34,56,.14), 0 2px 6px rgba(21,34,56,.08);
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
+  html,body{margin:0;padding:0; overflow-x:hidden;}
   body{
     font-family:'Inter',system-ui,sans-serif;
     background:
-      radial-gradient(1100px 480px at 100% -8%, #f8f2e2 0%, transparent 55%),
+      radial-gradient(1100px 480px at 100% -8%, #dceafe 0%, transparent 55%),
       var(--bg);
     color:var(--ink);
     font-size:14px;
@@ -60,8 +60,8 @@
     display:flex; flex-direction:column; padding:20px 0;
     box-shadow:2px 0 18px rgba(0,0,0,.18);
   }
-  #sidebar .brand{ padding:0 20px 18px 20px; border-bottom:1px solid #24382f; margin-bottom:10px; display:flex; align-items:center; gap:10px;}
-  #sidebar .brand .mark{ width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg, var(--accent), var(--accent-2)); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:#fff; box-shadow:0 3px 10px rgba(192,91,36,.35);}
+  #sidebar .brand{ padding:0 20px 18px 20px; border-bottom:1px solid #1c3c6e; margin-bottom:10px; display:flex; align-items:center; gap:10px;}
+  #sidebar .brand .mark{ width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg, var(--accent), var(--accent-2)); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:#fff; box-shadow:0 3px 10px rgba(37,99,235,.4);}
   #sidebar .brand .name{ font-family:'Zilla Slab',serif; font-size:18px; font-weight:700; color:#fff; line-height:1.15; }
   #sidebar .brand .sub{ font-size:10.5px; color:var(--side-ink-dim); margin-top:2px; letter-spacing:.03em; text-transform:uppercase;}
   .navlist{ list-style:none; margin:0; padding:0 8px; flex:1; }
@@ -73,9 +73,9 @@
     transition:background .15s ease, color .15s ease;
   }
   .navbtn .ic{ width:16px; text-align:center; font-size:14px; }
-  .navbtn:hover{ background:#1b2f28; color:var(--side-ink); }
-  .navbtn.active{ background:var(--side-active); color:#fff; border-left-color:var(--accent); font-weight:600; box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);}
-  #sidebar .footer{ padding:14px 20px 0 20px; font-size:11px; color:var(--side-ink-dim); border-top:1px solid #24382f; margin-top:10px;}
+  .navbtn:hover{ background:#152f5c; color:var(--side-ink); }
+  .navbtn.active{ background:var(--side-active); color:#fff; border-left-color:#5CA8FF; font-weight:600; box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);}
+  #sidebar .footer{ padding:14px 20px 0 20px; font-size:11px; color:var(--side-ink-dim); border-top:1px solid #1c3c6e; margin-top:10px;}
 
   /* ---- Main ---- */
   #main{ flex:1; padding:26px 34px 60px 34px; max-width:1220px; }
@@ -95,10 +95,10 @@
 
   label{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:5px; }
   input[type=text],input[type=number],input[type=tel],input[type=date],input[type=email],select,textarea{
-    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:4px; background:#FCFBF7;
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:4px; background:#FAFCFF;
     font:inherit; font-size:13.5px; color:var(--ink);
   }
-  input:focus,select:focus,textarea:focus{ outline:2px solid #C05B2455; border-color:var(--accent); }
+  input:focus,select:focus,textarea:focus{ outline:2px solid #2563EB40; border-color:var(--accent); }
   .field{ margin-bottom:12px; }
 
   button{ font:inherit; cursor:pointer; }
@@ -106,10 +106,10 @@
     display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:var(--radius-sm); border:1px solid var(--line);
     background:#fff; color:var(--ink); font-weight:600; font-size:13px; transition:background .12s ease, transform .12s ease, box-shadow .12s ease;
   }
-  .btn:hover{ background:#F5F2E9; }
+  .btn:hover{ background:#EEF4FE; }
   .btn:active{ transform:translateY(1px); }
-  .btn.primary{ background:linear-gradient(180deg, var(--accent), #A84C1B); border-color:#A84C1B; color:var(--accent-ink); box-shadow:0 2px 8px rgba(192,91,36,.28); }
-  .btn.primary:hover{ background:linear-gradient(180deg, #CC6529, #9A4517); }
+  .btn.primary{ background:linear-gradient(180deg, var(--accent), #1E45B8); border-color:#1E45B8; color:var(--accent-ink); box-shadow:0 2px 8px rgba(37,99,235,.32); }
+  .btn.primary:hover{ background:linear-gradient(180deg, #4079F0, #1B3E9F); }
   .btn.ghost{ border-color:transparent; background:transparent; }
   .btn.danger{ color:var(--bad); border-color:var(--bad-bg); }
   .btn.danger:hover{ background:var(--bad-bg); }
@@ -117,15 +117,15 @@
 
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); padding:8px 10px; border-bottom:1px solid var(--line); }
-  td{ padding:9px 10px; border-bottom:1px solid #EFEBDD; vertical-align:middle; }
+  td{ padding:9px 10px; border-bottom:1px solid #E8EFFA; vertical-align:middle; }
   tr:last-child td{ border-bottom:none; }
-  tr:hover td{ background:#FAF8F1; }
+  tr:hover td{ background:#F5F9FE; }
   td.num,th.num{ text-align:right; }
 
   .pill{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; }
   .pill.good{ background:var(--good-bg); color:var(--good); }
   .pill.bad{ background:var(--bad-bg); color:var(--bad); }
-  .pill.neutral{ background:#EDEAE0; color:var(--ink-soft); }
+  .pill.neutral{ background:#E6EDF9; color:var(--ink-soft); }
   .pill.info{ background:var(--info-bg); color:var(--info); }
 
   .avatar{ display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:12px; flex-shrink:0; }
@@ -152,7 +152,7 @@
   .tab2{ padding:8px 16px; border:none; background:none; font:inherit; font-weight:600; font-size:13px; color:var(--ink-soft); border-bottom:2px solid transparent; cursor:pointer;}
   .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
 
-  .modal-bg{ position:fixed; inset:0; background:rgba(21,36,32,.5); display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; z-index:50;}
+  .modal-bg{ position:fixed; inset:0; background:rgba(10,24,48,.55); display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; z-index:50;}
   .modal{ background:#fff; border-radius:8px; width:100%; max-width:560px; padding:24px; box-shadow:0 12px 40px rgba(0,0,0,.25);}
   .modal.wide{ max-width:760px; }
   .modal-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
@@ -176,9 +176,9 @@
   .filter-tabs button{ padding:6px 13px; border-radius:20px; border:1px solid var(--line); background:#fff; font-size:12.5px; font-weight:600; color:var(--ink-soft); }
   .filter-tabs button.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
 
-  .mono-chip{ font-family:'IBM Plex Mono',monospace; font-size:12px; background:#F5F2E9; border:1px solid var(--line); border-radius:4px; padding:2px 7px; }
+  .mono-chip{ font-family:'IBM Plex Mono',monospace; font-size:12px; background:#EEF3FC; border:1px solid var(--line); border-radius:4px; padding:2px 7px; }
 
-  .statement-row{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #EFEBDD; font-size:13px;}
+  .statement-row{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #E8EFFA; font-size:13px;}
   .statement-row:last-child{ border-bottom:none; }
 
   /* ---- Invoice / Print (plain bill) ---- */
@@ -235,18 +235,86 @@
   }
 
   ::-webkit-scrollbar{ width:10px; height:10px;}
-  ::-webkit-scrollbar-thumb{ background:#cfc9b4; border-radius:6px;}
+  ::-webkit-scrollbar-thumb{ background:#b6c9e6; border-radius:6px;}
 
   /* ---- Login screen ---- */
-  #login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--side-bg); padding:20px; }
-  .login-card{ background:#fff; border-radius:8px; width:100%; max-width:360px; padding:30px 28px; box-shadow:0 12px 40px rgba(0,0,0,.3); }
+  #login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; background:radial-gradient(900px 500px at 15% 0%, #163a72 0%, transparent 55%), linear-gradient(160deg, var(--side-bg-2) 0%, var(--side-bg) 100%); padding:20px; }
+  .login-card{ background:#fff; border-radius:10px; width:100%; max-width:360px; padding:30px 28px; box-shadow:0 20px 50px rgba(6,18,40,.45); }
   .login-card h1{ font-size:20px; margin-bottom:4px; }
   .login-card .sub{ font-size:12.5px; color:var(--ink-soft); margin-bottom:20px; }
   .login-card .field{ margin-bottom:14px; }
   .login-error{ background:var(--bad-bg); color:var(--bad); font-size:12.5px; padding:8px 10px; border-radius:4px; margin-bottom:14px; display:none; }
   .login-card button{ width:100%; padding:10px; }
+
+  /* ---- Mobile topbar / off-canvas sidebar (phones & narrow tablets) ---- */
+  .mobile-topbar{
+    display:none; align-items:center; gap:12px; position:fixed; top:0; left:0; right:0; height:54px;
+    background:linear-gradient(180deg, var(--side-bg-2) 0%, var(--side-bg) 100%); color:#fff; z-index:60;
+    padding:0 14px; box-shadow:0 2px 12px rgba(6,14,30,.25);
+  }
+  .mobile-topbar .mt-title{ font-family:'Zilla Slab',serif; font-weight:700; font-size:16px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hamburger{ width:34px; height:34px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; background:none; border:none; cursor:pointer; padding:0; -webkit-tap-highlight-color:transparent; }
+  .hamburger span{ display:block; width:20px; height:2px; background:#fff; border-radius:2px; }
+  .sidebar-overlay{ display:none; position:fixed; inset:0; background:rgba(6,14,30,.55); z-index:55; }
+  .sidebar-overlay.show{ display:block; }
+  body.no-scroll{ overflow:hidden; }
+
+  /* ---- Comfortable touch targets everywhere (phones/tablets) ---- */
+  @media (max-width:880px){
+    .mobile-topbar{ display:flex; }
+    #sidebar{
+      position:fixed; top:0; left:0; height:100vh; width:250px; max-width:82vw; z-index:65;
+      transform:translateX(-100%); transition:transform .22s ease; box-shadow:2px 0 28px rgba(0,0,0,.35);
+    }
+    #sidebar.open{ transform:translateX(0); }
+    #main{ padding:66px 16px 40px 16px; max-width:100%; }
+    .kpis{ grid-template-columns:1fr 1fr; }
+  }
+  @media (max-width:640px){
+    .grid.cols-2,.grid.cols-3,.grid.cols-4{ grid-template-columns:1fr; }
+    .kpis{ grid-template-columns:1fr 1fr; gap:10px; }
+    .pagehead{ align-items:flex-start; }
+    .pagehead h1{ font-size:20px; }
+    .card{ padding:14px; }
+    #main{ padding:62px 12px 36px 12px; }
+    table{ font-size:12.5px; }
+    th{ padding:7px 6px; }
+    td{ padding:8px 6px; }
+    .searchbar{ max-width:none; }
+    .itemhead{ display:none; }
+    .itemrow{
+      grid-template-columns:1fr 1fr 1fr auto; row-gap:6px; column-gap:6px;
+      grid-template-areas:"product product product rm" "qty price total total";
+      align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px dashed var(--line);
+    }
+    .itemrow > *:nth-child(1){ grid-area:product; }
+    .itemrow > *:nth-child(2){ grid-area:qty; }
+    .itemrow > *:nth-child(3){ grid-area:price; }
+    .itemrow > *:nth-child(4){ grid-area:total; text-align:right; font-weight:600; }
+    .itemrow > *:nth-child(5){ grid-area:rm; justify-self:end; }
+  }
+  /* Ensure wide tables scroll horizontally instead of crushing columns */
+  @media (max-width:900px){
+    .card{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .card table{ min-width:560px; }
+    #invoice-paper, #gst-invoice{ min-width:0; }
+  }
+  /* Prevent iOS Safari auto-zoom on input focus, and give touch-friendly tap targets */
+  @media (max-width:880px){
+    input[type=text],input[type=number],input[type=tel],input[type=date],input[type=email],select,textarea{
+      font-size:16px; padding:10px 11px;
+    }
+    .btn{ padding:10px 16px; }
+    .btn.sm{ padding:8px 12px; }
+    .navbtn{ padding:12px 12px; font-size:14.5px; }
+    button, a, input, select{ touch-action:manipulation; }
+  }
+  @media (max-width:420px){
+    .kpis{ grid-template-columns:1fr; }
+  }
 </style>
 </head>
+
 <body>
 
 <div id="login-screen" style="display:none;">
@@ -261,6 +329,11 @@
 </div>
 
 <div id="app" style="display:none;">
+  <div class="mobile-topbar" id="mobile-topbar">
+    <button class="hamburger" id="hamburger-btn" aria-label="Open menu"><span></span><span></span><span></span></button>
+    <div class="mt-title" id="mt-title">Shop Ledger</div>
+  </div>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
   <nav id="sidebar">
     <div class="brand">
       <div class="mark">&#128241;</div>
@@ -603,9 +676,33 @@ function renderSidebar(){
     </button></li>
   `).join('');
   nav.querySelectorAll('.navbtn').forEach(b=>{
-    b.addEventListener('click', ()=>{ activeTab = b.dataset.tab; render(); });
+    b.addEventListener('click', ()=>{ activeTab = b.dataset.tab; render(); closeMobileSidebar(); });
   });
+  const mtTitle = document.getElementById('mt-title');
+  if(mtTitle){
+    const cur = items.find(it=>it.id===activeTab);
+    mtTitle.textContent = cur ? cur.label : (state.company.name || 'Shop Ledger');
+  }
 }
+
+function openMobileSidebar(){
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('show');
+  document.body.classList.add('no-scroll');
+}
+function closeMobileSidebar(){
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  if(sb) sb.classList.remove('open');
+  if(ov) ov.classList.remove('show');
+  document.body.classList.remove('no-scroll');
+}
+(function initMobileNav(){
+  const hb = document.getElementById('hamburger-btn');
+  const ov = document.getElementById('sidebar-overlay');
+  if(hb) hb.addEventListener('click', openMobileSidebar);
+  if(ov) ov.addEventListener('click', closeMobileSidebar);
+})();
 
 function switchTab(tab){ activeTab = tab; render(); }
 
@@ -1082,6 +1179,7 @@ function viewLedger(){
             <button class="btn sm ghost" data-action="view-statement" data-key="${esc(c.key)}" data-name="${esc(c.name)}" data-phone="${esc(c.phone||'')}" data-type="${ledgerTab}">Statement</button>
             <button class="btn sm ghost" data-action="add-payment" data-key="${esc(c.key)}" data-name="${esc(c.name)}" data-type="${ledgerTab}">+ Payment</button>
             ${ledgerTab==='customer' ? `<button class="btn sm ghost" data-action="edit-customer" data-key="${esc(c.key)}">Edit</button>` : ''}
+            ${ledgerTab==='customer' && c.registered && isAdmin() ? `<button class="btn sm danger" data-action="del-customer" data-key="${esc(c.key)}" data-name="${esc(c.name)}">Delete</button>` : ''}
           </td>
         </tr>`).join('')}
       </tbody></table>`}
@@ -1312,6 +1410,20 @@ function doRemoveUser(username){
   }
   if(!confirm(`Remove access for "${username}"? They will no longer be able to sign in.`)) return;
   state.users = state.users.filter(u=>u.username!==username);
+  saveState(); render();
+}
+
+function doDeleteCustomer(key){
+  if(!isAdmin()) return;
+  const rec = (state.customers||[]).find(c=> customerKey(c)===key);
+  if(!rec) return;
+  const hasHistory = state.sales.some(s=> (s.customerPhone||s.customer||'walk-in').trim().toLowerCase()===key)
+    || state.payments.some(p=> p.partyType==='customer' && (p.partyKey||'').trim().toLowerCase()===key);
+  const warn = hasHistory
+    ? `Delete "${rec.name}"? Their saved contact details will be removed, but past bills and payments will stay in the ledger under this name/phone.`
+    : `Delete customer "${rec.name}"? This cannot be undone.`;
+  if(!confirm(warn)) return;
+  state.customers = state.customers.filter(c=> customerKey(c)!==key);
   saveState(); render();
 }
 
@@ -1852,6 +1964,7 @@ function attachHandlers(){
     const row = customerLedgerList().find(c=>c.key===b.dataset.key);
     openModal(customerFormModal(existing || (row ? { id:null, name:row.name, phone:row.phone, address:'', email:'', notes:'' } : null)));
   }));
+  main.querySelectorAll('[data-action="del-customer"]').forEach(b=>b.addEventListener('click', ()=> doDeleteCustomer(b.dataset.key)));
   main.querySelectorAll('[data-action="add-payment"]').forEach(b=>b.addEventListener('click', ()=>{
     openModal(paymentFormModal(b.dataset.key,b.dataset.name,b.dataset.type));
   }));
@@ -2219,6 +2332,7 @@ function attachModalHandlers(){
     localStorage.setItem(SESSION_KEY, rec.username);
     loginScreen.style.display = 'none';
     appRoot.style.display = 'flex';
+    if(typeof closeMobileSidebar==='function') closeMobileSidebar();
     render();
   }
 
@@ -2241,6 +2355,7 @@ function attachModalHandlers(){
     appRoot.style.display = 'none';
     loginScreen.style.display = 'flex';
     userInp.value = ''; passInp.value = ''; hideError();
+    if(typeof closeMobileSidebar==='function') closeMobileSidebar();
   };
 
   (async function boot(){
