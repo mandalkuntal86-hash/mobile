@@ -978,7 +978,7 @@ function exportImeiCsv(){
    ========================================================= */
 let purchaseItems = [];
 function viewPurchase(){
-  if(purchaseItems.length===0) purchaseItems = [{ productId:'', name:'', qty:1, price:0, imeiText:'', imeiOpen:false }];
+  if(purchaseItems.length===0) purchaseItems = [{ productId:'', name:'', qty:1, price:0, imeiText:'', imeiOpen:false, hsn:'' }];
   const recent = [...state.purchases].sort((a,b)=> b.date.localeCompare(a.date)).slice(0,10);
   const total = purchaseItems.reduce((a,it)=> a + (Number(it.qty)||0)*(Number(it.price)||0), 0);
   return `
@@ -1005,28 +1005,37 @@ function viewPurchase(){
     <div class="card">
       <h2>Recent Purchases</h2>
       ${recent.length===0? emptyState('No purchases yet','Recorded purchases will show up here.') : `
-      <table><thead><tr><th>Date</th><th>Invoice</th><th>Supplier</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th></tr></thead><tbody>
-      ${recent.map(p=>`<tr><td>${fmtDate(p.date)}</td><td class="num">${p.invoiceNo}</td><td>${esc(p.supplier)}</td><td class="num">${money(p.total)}</td><td class="num">${money(p.paid)}</td><td>${dueStatusPill(p.total-p.paid)}</td></tr>`).join('')}
+      <table><thead><tr><th>Date</th><th>Invoice</th><th>Supplier</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody>
+      ${recent.map(p=>`<tr><td>${fmtDate(p.date)}</td><td class="num">${p.invoiceNo}</td><td>${esc(p.supplier)}</td><td class="num">${money(p.total)}</td><td class="num">${money(p.paid)}</td><td>${dueStatusPill(p.total-p.paid)}</td><td style="text-align:right; white-space:nowrap;">
+        ${isAdmin() ? `<button class="btn sm danger" data-action="del-purchase" data-id="${p.id}">Delete</button>` : ''}
+      </td></tr>`).join('')}
       </tbody></table>`}
     </div>
   `;
 }
 function purchaseItemRow(it,i){
-  const options = state.products.map(p=>`<option value="${p.id}" ${it.productId===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
   const qty = Number(it.qty)||0;
   const imeiCount = parseImeiLines(it.imeiText).length;
   const countOk = qty>0 && imeiCount===qty;
+  const typed = (it.name||'').trim();
+  let matchHint = '';
+  if(typed){
+    matchHint = it.productId
+      ? `<div class="imei-hint" style="margin:2px 0 8px 0;color:var(--good);">✓ Existing product — this purchase will add to its stock.</div>`
+      : `<div class="imei-hint" style="margin:2px 0 8px 0;color:#a56a00;">＋ New product "${esc(typed)}" will be created when you save.</div>`;
+  }
+  const showHsnField = typed && !it.productId;
   return `
   <div class="itemrow" data-row="${i}">
-    <select class="pu-product" data-i="${i}">
-      <option value="">— new product: "${esc(it.name)||'type name'}" —</option>
-      ${options}
-    </select>
+    <input type="text" class="pu-product" data-i="${i}" list="pu-product-list-${i}" value="${esc(it.name||'')}" placeholder="Search product, or type a new name…" autocomplete="off">
     <input type="number" class="pu-qty" data-i="${i}" value="${it.qty}" min="1">
     <input type="number" class="pu-price" data-i="${i}" value="${it.price}" min="0">
     <div class="num" style="padding:8px 0;">${money((Number(it.qty)||0)*(Number(it.price)||0))}</div>
     <button class="rm" data-action="pu-rm-row" data-i="${i}" title="Remove">&times;</button>
   </div>
+  <datalist id="pu-product-list-${i}">${state.products.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist>
+  ${matchHint}
+  ${showHsnField ? `<div class="field" style="margin:2px 0 8px 0;"><label>HSN/SAC Code for new product (optional)</label><input type="text" class="pu-hsn" data-i="${i}" value="${esc(it.hsn||'')}" placeholder="e.g. 85171200"></div>` : ''}
   <div class="imei-box" style="${countOk?'border-color:#bcd8c4;background:var(--good-bg);':''}">
     <label>IMEI / Serial numbers for this line <span style="color:var(--bad);">*</span> — one per line, exactly ${qty} required</label>
     <textarea class="pu-imei" data-i="${i}" rows="3" placeholder="e.g.\n356789012345671\n356789012345672">${esc(it.imeiText)}</textarea>
@@ -1039,7 +1048,7 @@ function purchaseItemRow(it,i){
    ========================================================= */
 let saleItems = [];
 function viewSales(){
-  if(saleItems.length===0) saleItems = [{ productId:'', qty:1, price:0, imeiUnitIds:[] }];
+  if(saleItems.length===0) saleItems = [{ productId:'', qty:1, price:0, imeiUnitIds:[], query:'' }];
   const recent = [...state.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo)).slice(0,10);
   const subtotal = saleItems.reduce((a,it)=> a + (Number(it.qty)||0)*(Number(it.price)||0), 0);
   return `
@@ -1086,7 +1095,7 @@ function viewSales(){
   `;
 }
 function saleItemRow(it,i){
-  const options = state.products.map(p=>`<option value="${p.id}" ${it.productId===p.id?'selected':''} data-price="${p.salePrice}">${esc(p.name)} (stock ${p.stock})</option>`).join('');
+  if(it.query===undefined) it.query = it.productId ? ((productById(it.productId)||{}).name || '') : '';
   const qty = Math.max(1, Number(it.qty)||0);
   if(!Array.isArray(it.imeiUnitIds)) it.imeiUnitIds = [];
   while(it.imeiUnitIds.length < qty) it.imeiUnitIds.push('');
@@ -1124,15 +1133,19 @@ function saleItemRow(it,i){
       <div style="display:flex; flex-direction:column; gap:6px;">${rows}</div>
     </div>`;
   }
+  const noMatchHint = (it.query||'').trim() && !it.productId
+    ? `<div class="imei-hint" style="margin:2px 0 8px 0;color:var(--bad);">No product matches "${esc(it.query.trim())}" — check spelling, or add it first on the Products page.</div>`
+    : '';
   return `
   <div class="itemrow" data-row="${i}">
-    <select class="sa-product" data-i="${i}"><option value="">Select product…</option>${options}</select>
+    <input type="text" class="sa-product" data-i="${i}" list="sa-product-list-${i}" value="${esc(it.query||'')}" placeholder="Search product…" autocomplete="off">
     <input type="number" class="sa-qty" data-i="${i}" value="${it.qty}" min="1">
     <input type="number" class="sa-price" data-i="${i}" value="${it.price}" min="0">
     <div class="num" style="padding:8px 0;">${money((Number(it.qty)||0)*(Number(it.price)||0))}</div>
     <button class="rm" data-action="sa-rm-row" data-i="${i}" title="Remove">&times;</button>
   </div>
-  ${costHint}${imeiSection}`;
+  <datalist id="sa-product-list-${i}">${state.products.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist>
+  ${noMatchHint}${costHint}${imeiSection}`;
 }
 
 /* =========================================================
@@ -1566,6 +1579,27 @@ function doDeleteSale(saleId){
   render();
 }
 
+function doDeletePurchase(purchaseId){
+  if(!isAdmin()) return;
+  const p = state.purchases.find(x=>x.id===purchaseId);
+  if(!p) return;
+  const units = (state.imeiUnits||[]).filter(u=>u.purchaseId===purchaseId);
+  const soldUnits = units.filter(u=>u.status==='sold');
+  if(soldUnits.length>0){
+    alert(`Cannot delete purchase ${p.invoiceNo}: ${soldUnits.length} of its unit(s) have already been sold (e.g. IMEI ${soldUnits[0].imei}). Delete or revert the related sale bill(s) first.`);
+    return;
+  }
+  if(!confirm(`Delete purchase ${p.invoiceNo}? This will remove ${p.items.length} item line(s), reduce stock accordingly, and delete ${units.length} IMEI/serial record(s). This cannot be undone.`)) return;
+  p.items.forEach(it=>{
+    const prod = productById(it.productId);
+    if(prod) prod.stock = Math.max(0, Number(prod.stock||0) - it.qty);
+  });
+  state.imeiUnits = (state.imeiUnits||[]).filter(u=>u.purchaseId!==purchaseId);
+  state.purchases = state.purchases.filter(x=>x.id!==purchaseId);
+  saveState();
+  render();
+}
+
 /* =========================================================
    PRINT INVOICE
    ========================================================= */
@@ -1866,10 +1900,10 @@ function attachHandlers(){
 
   // Purchase
   const puAddRow = main.querySelector('[data-action="pu-add-row"]');
-  if(puAddRow) puAddRow.addEventListener('click', ()=>{ purchaseItems.push({productId:'',name:'',qty:1,price:0,imeiText:'',imeiOpen:false}); render(); });
+  if(puAddRow) puAddRow.addEventListener('click', ()=>{ purchaseItems.push({productId:'',name:'',qty:1,price:0,imeiText:'',imeiOpen:false,hsn:''}); render(); });
   main.querySelectorAll('[data-action="pu-rm-row"]').forEach(b=>b.addEventListener('click', ()=>{
     purchaseItems.splice(Number(b.dataset.i),1);
-    if(purchaseItems.length===0) purchaseItems.push({productId:'',name:'',qty:1,price:0,imeiText:'',imeiOpen:false});
+    if(purchaseItems.length===0) purchaseItems.push({productId:'',name:'',qty:1,price:0,imeiText:'',imeiOpen:false,hsn:''});
     render();
   }));
   main.querySelectorAll('[data-action="pu-imei-toggle"]').forEach(b=>b.addEventListener('click', ()=>{
@@ -1881,40 +1915,52 @@ function attachHandlers(){
     ta.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].imeiText = e.target.value; });
     ta.addEventListener('change', ()=> render());
   });
-  main.querySelectorAll('.pu-product').forEach(sel=>sel.addEventListener('change', e=>{
-    const i = Number(e.target.dataset.i);
-    purchaseItems[i].productId = e.target.value;
-    if(e.target.value){
-      const p = productById(e.target.value);
-      purchaseItems[i].name = p.name;
-      purchaseItems[i].price = p.purchasePrice;
-    }
-    render();
-  }));
+  main.querySelectorAll('.pu-product').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i);
+      const val = e.target.value;
+      purchaseItems[i].name = val;
+      const match = state.products.find(p=>p.name.trim().toLowerCase()===val.trim().toLowerCase());
+      if(match){
+        purchaseItems[i].productId = match.id;
+        purchaseItems[i].price = match.purchasePrice;
+      }else{
+        purchaseItems[i].productId = '';
+      }
+    });
+    inp.addEventListener('change', ()=> render());
+  });
   main.querySelectorAll('.pu-qty').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].qty = e.target.value; syncPurchaseTotalsOnly(); }));
   main.querySelectorAll('.pu-qty').forEach(inp=>inp.addEventListener('change', ()=> render()));
   main.querySelectorAll('.pu-price').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].price = e.target.value; syncPurchaseTotalsOnly(); }));
+  main.querySelectorAll('.pu-hsn').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].hsn = e.target.value; }));
   const savePurchaseBtn = main.querySelector('[data-action="save-purchase"]');
   if(savePurchaseBtn) savePurchaseBtn.addEventListener('click', doSavePurchase);
 
   // Sales
   const saAddRow = main.querySelector('[data-action="sa-add-row"]');
-  if(saAddRow) saAddRow.addEventListener('click', ()=>{ saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[]}); render(); });
+  if(saAddRow) saAddRow.addEventListener('click', ()=>{ saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],query:''}); render(); });
   main.querySelectorAll('[data-action="sa-rm-row"]').forEach(b=>b.addEventListener('click', ()=>{
     saleItems.splice(Number(b.dataset.i),1);
-    if(saleItems.length===0) saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[]});
+    if(saleItems.length===0) saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],query:''});
     render();
   }));
-  main.querySelectorAll('.sa-product').forEach(sel=>sel.addEventListener('change', e=>{
-    const i = Number(e.target.dataset.i);
-    saleItems[i].productId = e.target.value;
-    saleItems[i].imeiUnitIds = [];
-    if(e.target.value){
-      const p = productById(e.target.value);
-      saleItems[i].price = p.salePrice;
-    }
-    render();
-  }));
+  main.querySelectorAll('.sa-product').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i);
+      const val = e.target.value;
+      saleItems[i].query = val;
+      const match = state.products.find(p=>p.name.trim().toLowerCase()===val.trim().toLowerCase());
+      if(match){
+        saleItems[i].productId = match.id;
+        saleItems[i].price = match.salePrice;
+      }else{
+        saleItems[i].productId = '';
+      }
+      saleItems[i].imeiUnitIds = [];
+    });
+    inp.addEventListener('change', ()=> render());
+  });
   main.querySelectorAll('.sa-qty').forEach(inp=>inp.addEventListener('input', e=>{ saleItems[Number(e.target.dataset.i)].qty = e.target.value; syncSaleTotalsOnly(); }));
   main.querySelectorAll('.sa-qty').forEach(inp=>inp.addEventListener('change', ()=> render()));
   main.querySelectorAll('.sa-price').forEach(inp=>inp.addEventListener('input', e=>{ saleItems[Number(e.target.dataset.i)].price = e.target.value; syncSaleTotalsOnly(); }));
@@ -1947,6 +1993,7 @@ function attachHandlers(){
   main.querySelectorAll('[data-action="print-sale"]').forEach(b=>b.addEventListener('click', ()=> printInvoice(b.dataset.id)));
   main.querySelectorAll('[data-action="edit-sale"]').forEach(b=>b.addEventListener('click', ()=> openEditSale(b.dataset.id)));
   main.querySelectorAll('[data-action="del-sale"]').forEach(b=>b.addEventListener('click', ()=> doDeleteSale(b.dataset.id)));
+  main.querySelectorAll('[data-action="del-purchase"]').forEach(b=>b.addEventListener('click', ()=> doDeletePurchase(b.dataset.id)));
 
   // Users (admin-only)
   const addUserBtn = main.querySelector('[data-action="add-user"]');
@@ -2031,7 +2078,7 @@ function doSavePurchase(){
     if(!productId){
       const name = it.name.trim();
       if(!name) return;
-      const np = { id: uid('p'), name, brand:'', imei:'', purchasePrice: price, salePrice: Math.round(price*1.1), stock:0, minStock:2 };
+      const np = { id: uid('p'), name, brand:'', imei:'', hsn: (it.hsn||'').trim(), purchasePrice: price, salePrice: Math.round(price*1.1), stock:0, minStock:2 };
       state.products.push(np);
       productId = np.id;
     }
