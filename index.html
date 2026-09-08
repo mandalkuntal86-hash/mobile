@@ -1130,17 +1130,20 @@ function exportImeiCsv(){
    PURCHASE ENTRY
    ========================================================= */
 let purchaseItems = [];
+let purchaseDraft = { supplier:'', date:'', invoiceNo:'', paid:'' };
 function viewPurchase(){
   if(purchaseItems.length===0) purchaseItems = [{ productId:'', name:'', qty:1, price:0, imeiText:'', imeiOpen:false, hsn:'' }];
+  if(!purchaseDraft.date) purchaseDraft.date = todayISO();
+  if(!purchaseDraft.invoiceNo) purchaseDraft.invoiceNo = nextPurchaseNo();
   const recent = [...state.purchases].sort((a,b)=> b.date.localeCompare(a.date)).slice(0,10);
   const total = purchaseItems.reduce((a,it)=> a + (Number(it.qty)||0)*(Number(it.price)||0), 0);
   return `
     <div class="pagehead"><div><h1>Purchase Entry</h1><div class="desc">Record stock coming in from a supplier</div></div></div>
     <div class="card">
       <div class="grid cols-3">
-        <div class="field"><label>Supplier Name</label><input type="text" id="pu-supplier" list="pu-supplier-list" placeholder="e.g. Reliance Distributors" autocomplete="off"></div>
-        <div class="field"><label>Purchase Date</label><input type="date" id="pu-date" value="${todayISO()}"></div>
-        <div class="field"><label>Purchase Invoice #</label><input type="text" id="pu-invno" value="${nextPurchaseNo()}"></div>
+        <div class="field"><label>Supplier Name</label><input type="text" id="pu-supplier" list="pu-supplier-list" value="${esc(purchaseDraft.supplier)}" placeholder="e.g. Reliance Distributors" autocomplete="off"></div>
+        <div class="field"><label>Purchase Date</label><input type="date" id="pu-date" value="${purchaseDraft.date}"></div>
+        <div class="field"><label>Purchase Invoice #</label><input type="text" id="pu-invno" value="${esc(purchaseDraft.invoiceNo)}"></div>
       </div>
       <datalist id="pu-supplier-list">${supplierLedgerList().map(s=>`<option value="${esc(s.name)}">`).join('')}</datalist>
       <h3 style="margin-top:12px;">Items</h3>
@@ -1148,7 +1151,7 @@ function viewPurchase(){
       <div id="purchase-item-rows">${purchaseItems.map((it,i)=>purchaseItemRow(it,i)).join('')}</div>
       <button class="btn sm ghost" data-action="pu-add-row" style="margin-top:4px;">+ Add item</button>
       <div class="grid cols-2" style="margin-top:16px;">
-        <div class="field"><label>Amount Paid Now (₹)</label><input type="number" id="pu-paid" value="0"></div>
+        <div class="field"><label>Amount Paid Now (₹)</label><input type="number" id="pu-paid" value="${esc(purchaseDraft.paid)}" placeholder="0"></div>
         <div style="align-self:end; text-align:right; padding-bottom:8px;">
           <div style="font-size:12px;color:var(--ink-soft)">Total</div>
           <div class="num" style="font-size:20px;font-weight:700;">${money(total)}</div>
@@ -1203,9 +1206,12 @@ function purchaseItemRow(it,i){
    SALES / BILLING
    ========================================================= */
 let saleItems = [];
-let saleCustomerDraft = { name:'', phone:'', address:'', paid:'' };
+let saleCustomerDraft = { name:'', phone:'', address:'', paid:'', date:'', invoiceNo:'', discount:'', mode:'Cash' };
 function viewSales(){
   if(saleItems.length===0) saleItems = [{ productId:'', qty:1, price:0, imeiUnitIds:[], query:'' }];
+  if(!saleCustomerDraft.date) saleCustomerDraft.date = todayISO();
+  if(!saleCustomerDraft.invoiceNo) saleCustomerDraft.invoiceNo = nextInvoiceNo();
+  if(!saleCustomerDraft.mode) saleCustomerDraft.mode = 'Cash';
   const recent = [...state.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo)).slice(0,10);
   const subtotal = saleItems.reduce((a,it)=> a + (Number(it.qty)||0)*(Number(it.price)||0), 0);
   return `
@@ -1214,23 +1220,23 @@ function viewSales(){
       <div class="grid cols-3">
         <div class="field"><label>Customer Name</label><input type="text" id="sa-customer" list="sa-customer-list" value="${esc(saleCustomerDraft.name)}" placeholder="Walk-in customer" autocomplete="off"></div>
         <div class="field"><label>Phone Number</label><input type="tel" id="sa-phone" list="sa-phone-list" value="${esc(saleCustomerDraft.phone)}" autocomplete="off"></div>
-        <div class="field"><label>Bill Date</label><input type="date" id="sa-date" value="${todayISO()}"></div>
+        <div class="field"><label>Bill Date</label><input type="date" id="sa-date" value="${saleCustomerDraft.date}"></div>
       </div>
       <div class="field"><label>Customer Address (optional, for GST invoice)</label><input type="text" id="sa-address" value="${esc(saleCustomerDraft.address)}" placeholder="e.g. Bagdah, North 24 Parganas"></div>
       <datalist id="sa-customer-list">${customerLedgerList().filter(c=>c.key!=='walk-in').map(c=>`<option value="${esc(c.name)}">${c.phone?esc(c.phone):''}</option>`).join('')}</datalist>
       <datalist id="sa-phone-list">${customerLedgerList().filter(c=>c.key!=='walk-in' && c.phone).map(c=>`<option value="${esc(c.phone)}">${esc(c.name)}</option>`).join('')}</datalist>
       <div class="imei-hint" style="margin:-8px 0 12px 0;">Start typing to pick an existing customer, or just type a new name/phone — it'll be added to your Customer Ledger automatically when you save this bill.</div>
-      <div class="field"><label>Invoice #</label><input type="text" id="sa-invno" value="${nextInvoiceNo()}" style="max-width:200px;"></div>
+      <div class="field"><label>Invoice #</label><input type="text" id="sa-invno" value="${esc(saleCustomerDraft.invoiceNo)}" style="max-width:200px;"></div>
       <h3 style="margin-top:8px;">Items</h3>
       <div class="itemhead"><div>Product</div><div>Qty</div><div>Price ea.</div><div>Line total</div><div></div></div>
       <div id="sale-item-rows">${saleItems.map((it,i)=>saleItemRow(it,i)).join('')}</div>
       <button class="btn sm ghost" data-action="sa-add-row" style="margin-top:4px;">+ Add item</button>
 
       <div class="grid cols-4" style="margin-top:16px;">
-        <div class="field"><label>Discount (₹)</label><input type="number" id="sa-discount" value="0"></div>
+        <div class="field"><label>Discount (₹)</label><input type="number" id="sa-discount" value="${esc(saleCustomerDraft.discount)}" placeholder="0"></div>
         <div class="field"><label>Amount Paid (₹)</label><input type="number" id="sa-paid" value="${esc(saleCustomerDraft.paid)}" placeholder="0"></div>
         <div class="field"><label>Payment Mode</label>
-          <select id="sa-mode"><option>Cash</option><option>UPI</option><option>Card</option><option>Credit / Due</option></select>
+          <select id="sa-mode">${['Cash','UPI','Card','Credit / Due'].map(m=>`<option ${saleCustomerDraft.mode===m?'selected':''}>${m}</option>`).join('')}</select>
         </div>
         <div style="align-self:end; text-align:right; padding-bottom:8px;">
           <div style="font-size:12px;color:var(--ink-soft)">Subtotal</div>
@@ -2229,6 +2235,17 @@ function attachHandlers(){
   main.querySelectorAll('.pu-qty').forEach(inp=>inp.addEventListener('change', ()=> render()));
   main.querySelectorAll('.pu-price').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].price = e.target.value; syncPurchaseTotalsOnly(); }));
   main.querySelectorAll('.pu-hsn').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].hsn = e.target.value; }));
+  const puSupplierInp = main.querySelector('#pu-supplier');
+  const puDateInp = main.querySelector('#pu-date');
+  const puInvnoInp = main.querySelector('#pu-invno');
+  const puPaidInp = main.querySelector('#pu-paid');
+  // Keep supplier/date/invoice#/paid in a draft that survives re-renders
+  // (adding/removing items, picking a product, editing qty/price, etc. all
+  // re-render this whole form — without this the fields would reset blank).
+  if(puSupplierInp) puSupplierInp.addEventListener('input', e=> purchaseDraft.supplier = e.target.value);
+  if(puDateInp) puDateInp.addEventListener('input', e=> purchaseDraft.date = e.target.value);
+  if(puInvnoInp) puInvnoInp.addEventListener('input', e=> purchaseDraft.invoiceNo = e.target.value);
+  if(puPaidInp) puPaidInp.addEventListener('input', e=> purchaseDraft.paid = e.target.value);
   const savePurchaseBtn = main.querySelector('[data-action="save-purchase"]');
   if(savePurchaseBtn) savePurchaseBtn.addEventListener('click', doSavePurchase);
 
@@ -2292,6 +2309,14 @@ function attachHandlers(){
     const match = customerLedgerList().find(c=> c.phone && c.phone===e.target.value.trim());
     if(match) fillFromCustomer(match);
   });
+  const saDateInp = main.querySelector('#sa-date');
+  const saInvnoInp = main.querySelector('#sa-invno');
+  const saDiscountInp = main.querySelector('#sa-discount');
+  const saModeInp = main.querySelector('#sa-mode');
+  if(saDateInp) saDateInp.addEventListener('input', e=> saleCustomerDraft.date = e.target.value);
+  if(saInvnoInp) saInvnoInp.addEventListener('input', e=> saleCustomerDraft.invoiceNo = e.target.value);
+  if(saDiscountInp) saDiscountInp.addEventListener('input', e=> saleCustomerDraft.discount = e.target.value);
+  if(saModeInp) saModeInp.addEventListener('change', e=> saleCustomerDraft.mode = e.target.value);
   main.querySelectorAll('[data-action="print-sale"]').forEach(b=>b.addEventListener('click', ()=> printInvoice(b.dataset.id)));
   main.querySelectorAll('[data-action="edit-sale"]').forEach(b=>b.addEventListener('click', ()=> openEditSale(b.dataset.id)));
   main.querySelectorAll('[data-action="del-sale"]').forEach(b=>b.addEventListener('click', ()=> doDeleteSale(b.dataset.id)));
@@ -2413,6 +2438,7 @@ function doSavePurchase(){
   state.counters.purchase += 1;
   upsertSupplierFromPurchase(supplier);
   purchaseItems = [];
+  purchaseDraft = { supplier:'', date:'', invoiceNo:'', paid:'' };
   saveState();
   switchTab('purchase');
 }
@@ -2477,7 +2503,7 @@ function doSaveSale(){
   items.forEach(it=>{ (it.imeiUnitIds||[]).forEach(id=> markImeiUnitSold(id, sale.id, date, customer, customerPhone)); });
 
   saleItems = [];
-  saleCustomerDraft = { name:'', phone:'', address:'', paid:'' };
+  saleCustomerDraft = { name:'', phone:'', address:'', paid:'', date:'', invoiceNo:'', discount:'', mode:'Cash' };
   saveState();
   activeTab = 'sales';
   render();
