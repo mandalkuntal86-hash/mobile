@@ -417,6 +417,7 @@ const DEFAULT_STATE = {
   payments: [],
   users: [],
   customers: [],
+  suppliers: [],
   imeiUnits: [],
   counters: { invoice: 1, purchase: 1 }
 };
@@ -575,15 +576,24 @@ function revertImeiUnitsForSale(saleId){
   });
 }
 
+function supplierKey(s){ return (s.name||'unknown').trim().toLowerCase() || 'unknown'; }
+function supplierById(key){ return (state.suppliers||[]).find(s=> supplierKey(s)===key); }
 function supplierLedgerList(){
   const map = {};
+  // Start from explicitly registered suppliers, so the ledger is a full
+  // supplier directory — not just names that happen to have a purchase.
+  (state.suppliers||[]).forEach(s=>{
+    const key = supplierKey(s);
+    map[key] = { key, name:s.name||'Unknown', phone:s.phone||'', address:s.address||'', notes:s.notes||'', registered:true, billed:0, paid:0, count:0, last:'' };
+  });
   state.purchases.forEach(p=>{
     const key = (p.supplier||'unknown').trim().toLowerCase();
-    if(!map[key]) map[key] = { key, name:p.supplier||'Unknown', billed:0, paid:0, count:0, last:p.date };
+    if(!map[key]) map[key] = { key, name:p.supplier||'Unknown', phone:'', address:'', billed:0, paid:0, count:0, last:p.date };
     map[key].billed += p.total;
     map[key].paid += p.paid;
     map[key].count += 1;
     if(p.date > map[key].last) map[key].last = p.date;
+    if(p.supplier && !map[key].registered) map[key].name = p.supplier;
   });
   state.payments.filter(p=>p.partyType==='supplier').forEach(p=>{
     const key = (p.partyKey||'').trim().toLowerCase();
@@ -1002,10 +1012,11 @@ function viewPurchase(){
     <div class="pagehead"><div><h1>Purchase Entry</h1><div class="desc">Record stock coming in from a supplier</div></div></div>
     <div class="card">
       <div class="grid cols-3">
-        <div class="field"><label>Supplier Name</label><input type="text" id="pu-supplier" placeholder="e.g. Reliance Distributors"></div>
+        <div class="field"><label>Supplier Name</label><input type="text" id="pu-supplier" list="pu-supplier-list" placeholder="e.g. Reliance Distributors" autocomplete="off"></div>
         <div class="field"><label>Purchase Date</label><input type="date" id="pu-date" value="${todayISO()}"></div>
         <div class="field"><label>Purchase Invoice #</label><input type="text" id="pu-invno" value="${nextPurchaseNo()}"></div>
       </div>
+      <datalist id="pu-supplier-list">${supplierLedgerList().map(s=>`<option value="${esc(s.name)}">`).join('')}</datalist>
       <h3 style="margin-top:12px;">Items</h3>
       <div class="itemhead"><div>Product</div><div>Qty</div><div>Price ea.</div><div>Line total</div><div></div></div>
       <div id="purchase-item-rows">${purchaseItems.map((it,i)=>purchaseItemRow(it,i)).join('')}</div>
@@ -1181,7 +1192,7 @@ function viewLedger(){
   return `
     <div class="pagehead">
       <div><h1>${ledgerTab==='customer'?'Customer Ledger':'Supplier Ledger'}</h1><div class="desc">Full account of every ${ledgerTab==='customer'?'customer':'supplier'} — billing, payments and running balance</div></div>
-      ${ledgerTab==='customer' ? `<button class="btn primary" data-action="add-customer">+ Add Customer</button>` : ''}
+      ${ledgerTab==='customer' ? `<button class="btn primary" data-action="add-customer">+ Add Customer</button>` : `<button class="btn primary" data-action="add-supplier">+ Add Supplier</button>`}
     </div>
     <div class="tabs2">
       <button class="tab2 ${ledgerTab==='customer'?'active':''}" data-action="ledger-tab" data-tab="customer">Customers</button>
@@ -1194,7 +1205,7 @@ function viewLedger(){
     </div>
     <div class="card">
       <input class="searchbar" type="text" placeholder="Search name or phone…" id="ledger-search" value="${esc(ledgerSearch)}">
-      ${list.length===0 ? emptyState('Nothing here yet', ledgerTab==='customer' ? 'Add a customer, or their balance will appear automatically after your first bill.' : 'Supplier balances appear after purchases.') : `
+      ${list.length===0 ? emptyState('Nothing here yet', ledgerTab==='customer' ? 'Add a customer, or their balance will appear automatically after your first bill.' : 'Add a supplier, or their balance will appear automatically after your first purchase.') : `
       <table><thead><tr><th>${ledgerTab==='customer'?'Customer':'Supplier'}</th><th class="num">Billed</th><th class="num">Paid</th><th class="num">Balance Due</th><th>Last Activity</th><th></th></tr></thead><tbody>
       ${list.map(c=>`
         <tr>
@@ -1211,6 +1222,8 @@ function viewLedger(){
             <button class="btn sm ghost" data-action="add-payment" data-key="${esc(c.key)}" data-name="${esc(c.name)}" data-type="${ledgerTab}">+ Payment</button>
             ${ledgerTab==='customer' && isAdmin() ? `<button class="btn sm ghost" data-action="edit-customer" data-key="${esc(c.key)}">Edit</button>` : ''}
             ${ledgerTab==='customer' && c.registered && isAdmin() ? `<button class="btn sm danger" data-action="del-customer" data-key="${esc(c.key)}" data-name="${esc(c.name)}">Delete</button>` : ''}
+            ${ledgerTab==='supplier' && isAdmin() ? `<button class="btn sm ghost" data-action="edit-supplier" data-key="${esc(c.key)}">Edit</button>` : ''}
+            ${ledgerTab==='supplier' && c.registered && isAdmin() ? `<button class="btn sm danger" data-action="del-supplier" data-key="${esc(c.key)}" data-name="${esc(c.name)}">Delete</button>` : ''}
           </td>
         </tr>`).join('')}
       </tbody></table>`}
@@ -1234,6 +1247,26 @@ function customerFormModal(existing){
       <div style="text-align:right; margin-top:8px;">
         <button class="btn ghost" data-close="modal">Cancel</button>
         <button class="btn primary" data-action="save-customer" data-id="${c.id||''}">Save Customer</button>
+      </div>
+    </div>
+  </div>`;
+}
+function supplierFormModal(existing, oldKey){
+  const s = existing || { id:null, name:'', phone:'', address:'', notes:'' };
+  return `
+  <div class="modal-bg" data-close="modal">
+    <div class="modal" data-stop>
+      <div class="modal-head"><h2>${existing? 'Edit Supplier':'Add Supplier'}</h2><button class="modal-close" data-close="modal">&times;</button></div>
+      ${existing ? `<div class="imei-hint" style="margin:-4px 0 12px 0;">Renaming a supplier updates the name on every purchase and payment recorded under it, so its ledger stays intact.</div>` : ''}
+      <div class="grid cols-2">
+        <div class="field"><label>Supplier Name</label><input type="text" id="su-name" value="${esc(s.name)}" placeholder="e.g. Reliance Distributors"></div>
+        <div class="field"><label>Phone Number</label><input type="tel" id="su-phone" value="${esc(s.phone)}"></div>
+      </div>
+      <div class="field"><label>Address (optional)</label><input type="text" id="su-address" value="${esc(s.address)}"></div>
+      <div class="field"><label>Notes (optional)</label><textarea id="su-notes" rows="2">${esc(s.notes)}</textarea></div>
+      <div style="text-align:right; margin-top:8px;">
+        <button class="btn ghost" data-close="modal">Cancel</button>
+        <button class="btn primary" data-action="save-supplier" data-id="${s.id||''}" data-oldkey="${esc(oldKey||'')}">Save Supplier</button>
       </div>
     </div>
   </div>`;
@@ -1455,6 +1488,20 @@ function doDeleteCustomer(key){
     : `Delete customer "${rec.name}"? This cannot be undone.`;
   if(!confirm(warn)) return;
   state.customers = state.customers.filter(c=> customerKey(c)!==key);
+  saveState(); render();
+}
+
+function doDeleteSupplier(key){
+  if(!isAdmin()) return;
+  const rec = (state.suppliers||[]).find(s=> supplierKey(s)===key);
+  if(!rec) return;
+  const hasHistory = state.purchases.some(p=> (p.supplier||'unknown').trim().toLowerCase()===key)
+    || state.payments.some(p=> p.partyType==='supplier' && (p.partyKey||'').trim().toLowerCase()===key);
+  const warn = hasHistory
+    ? `Delete "${rec.name}"? Their saved contact details will be removed, but past purchases and payments will stay in the ledger under this name.`
+    : `Delete supplier "${rec.name}"? This cannot be undone.`;
+  if(!confirm(warn)) return;
+  state.suppliers = state.suppliers.filter(s=> supplierKey(s)!==key);
   saveState(); render();
 }
 
@@ -2096,6 +2143,17 @@ function attachHandlers(){
     openModal(customerFormModal(existing || (row ? { id:null, name:row.name, phone:row.phone, address:'', email:'', notes:'' } : null)));
   }));
   main.querySelectorAll('[data-action="del-customer"]').forEach(b=>b.addEventListener('click', ()=> doDeleteCustomer(b.dataset.key)));
+  const addSupplierBtn = main.querySelector('[data-action="add-supplier"]');
+  if(addSupplierBtn) addSupplierBtn.addEventListener('click', ()=> openModal(supplierFormModal(null, null)));
+  main.querySelectorAll('[data-action="edit-supplier"]').forEach(b=>b.addEventListener('click', ()=>{
+    if(!isAdmin()) return;
+    const key = b.dataset.key;
+    const existingRecord = supplierById(key);
+    const row = supplierLedgerList().find(c=>c.key===key);
+    const existing = existingRecord || (row ? { id:null, name:row.name, phone:row.phone||'', address:row.address||'', notes:'' } : null);
+    openModal(supplierFormModal(existing, key));
+  }));
+  main.querySelectorAll('[data-action="del-supplier"]').forEach(b=>b.addEventListener('click', ()=> doDeleteSupplier(b.dataset.key)));
   main.querySelectorAll('[data-action="add-payment"]').forEach(b=>b.addEventListener('click', ()=>{
     openModal(paymentFormModal(b.dataset.key,b.dataset.name,b.dataset.type));
   }));
@@ -2176,9 +2234,17 @@ function doSavePurchase(){
   const total = items.reduce((a,it)=>a+it.qty*it.price,0);
   state.purchases.push({ id: purchaseId, date, invoiceNo, supplier, items, total, paid, due: total-paid });
   state.counters.purchase += 1;
+  upsertSupplierFromPurchase(supplier);
   purchaseItems = [];
   saveState();
   switchTab('purchase');
+}
+function upsertSupplierFromPurchase(name){
+  if(!name) return;
+  const key = supplierKey({name});
+  if(!supplierById(key)){
+    state.suppliers.push({ id: uid('sup'), name, phone:'', address:'', notes:'', createdAt: todayISO() });
+  }
 }
 
 function doSaveSale(){
@@ -2433,6 +2499,51 @@ function attachModalHandlers(){
   // Edit-purchase modal (admin-only)
   const saveEditPurchaseBtn = root.querySelector('[data-action="save-edit-purchase"]');
   if(saveEditPurchaseBtn) saveEditPurchaseBtn.addEventListener('click', doSaveEditedPurchase);
+
+  // Add/Edit-supplier modal — admin-only for editing an existing supplier;
+  // adding a brand-new one (no oldKey / no id) is allowed for any signed-in user,
+  // same as Add Customer. Renaming propagates the new name across purchases/payments
+  // since suppliers are otherwise just a name string on each purchase.
+  const saveSupplierBtn = root.querySelector('[data-action="save-supplier"]');
+  if(saveSupplierBtn) saveSupplierBtn.addEventListener('click', ()=>{
+    const id = saveSupplierBtn.dataset.id;
+    const oldKey = saveSupplierBtn.dataset.oldkey || '';
+    if((id || oldKey) && !isAdmin()){ alert('Only an admin can edit an existing supplier.'); closeModal(); return; }
+    const name = document.getElementById('su-name').value.trim();
+    if(!name){ alert('Supplier name is required.'); return; }
+    const phone = document.getElementById('su-phone').value.trim();
+    const address = document.getElementById('su-address').value.trim();
+    const notes = document.getElementById('su-notes').value.trim();
+    const newKey = name.trim().toLowerCase();
+
+    if(id){
+      const s = (state.suppliers||[]).find(x=>x.id===id);
+      if(s) Object.assign(s, { name, phone, address, notes });
+    }else{
+      let s = oldKey ? supplierById(oldKey) : null;
+      if(s){
+        Object.assign(s, { name, phone, address, notes });
+      }else{
+        if(!oldKey && (state.suppliers||[]).some(x=>supplierKey(x)===newKey)){
+          alert('A supplier with this name already exists — use Edit instead.');
+          return;
+        }
+        state.suppliers.push({ id: uid('sup'), createdAt: todayISO(), name, phone, address, notes });
+      }
+    }
+
+    if(oldKey && oldKey!==newKey){
+      state.purchases.forEach(p=>{ if((p.supplier||'unknown').trim().toLowerCase()===oldKey) p.supplier = name; });
+      state.payments.forEach(p=>{
+        if(p.partyType==='supplier' && (p.partyKey||'').trim().toLowerCase()===oldKey){
+          p.partyKey = newKey;
+          p.partyName = name;
+        }
+      });
+    }
+
+    saveState(); closeModal(); render();
+  });
 
   // Add-user modal (admin-only) — stored directly in state.users, no external auth service needed.
   const saveUserBtn = root.querySelector('[data-action="save-user"]');
