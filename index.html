@@ -712,6 +712,14 @@ function switchTab(tab){ activeTab = tab; render(); }
 function render(){
   renderSidebar();
   const main = document.getElementById('main');
+  // Preserve focus & cursor position across re-render: typing in a search/filter
+  // box (or any input) re-renders the whole panel, which otherwise recreates the
+  // DOM node and kicks focus out after every keystroke.
+  const active = document.activeElement;
+  let focusInfo = null;
+  if(active && main.contains(active) && active.id){
+    focusInfo = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
+  }
   if(activeTab==='dashboard') main.innerHTML = viewDashboard();
   else if(activeTab==='company') main.innerHTML = viewCompany();
   else if(activeTab==='products') main.innerHTML = viewProducts();
@@ -722,6 +730,15 @@ function render(){
   else if(activeTab==='reports') main.innerHTML = viewReports();
   else if(activeTab==='users') main.innerHTML = isAdmin() ? viewUsers() : viewDashboard();
   attachHandlers();
+  if(focusInfo){
+    const el = document.getElementById(focusInfo.id);
+    if(el && typeof el.focus==='function'){
+      el.focus();
+      if(typeof el.setSelectionRange==='function' && focusInfo.start!=null){
+        try{ el.setSelectionRange(focusInfo.start, focusInfo.end); }catch(e){}
+      }
+    }
+  }
 }
 
 /* =========================================================
@@ -1192,7 +1209,7 @@ function viewLedger(){
           <td style="text-align:right; white-space:nowrap;">
             <button class="btn sm ghost" data-action="view-statement" data-key="${esc(c.key)}" data-name="${esc(c.name)}" data-phone="${esc(c.phone||'')}" data-type="${ledgerTab}">Statement</button>
             <button class="btn sm ghost" data-action="add-payment" data-key="${esc(c.key)}" data-name="${esc(c.name)}" data-type="${ledgerTab}">+ Payment</button>
-            ${ledgerTab==='customer' ? `<button class="btn sm ghost" data-action="edit-customer" data-key="${esc(c.key)}">Edit</button>` : ''}
+            ${ledgerTab==='customer' && isAdmin() ? `<button class="btn sm ghost" data-action="edit-customer" data-key="${esc(c.key)}">Edit</button>` : ''}
             ${ledgerTab==='customer' && c.registered && isAdmin() ? `<button class="btn sm danger" data-action="del-customer" data-key="${esc(c.key)}" data-name="${esc(c.name)}">Delete</button>` : ''}
           </td>
         </tr>`).join('')}
@@ -2073,6 +2090,7 @@ function attachHandlers(){
   const addCustomerBtn = main.querySelector('[data-action="add-customer"]');
   if(addCustomerBtn) addCustomerBtn.addEventListener('click', ()=> openModal(customerFormModal(null)));
   main.querySelectorAll('[data-action="edit-customer"]').forEach(b=>b.addEventListener('click', ()=>{
+    if(!isAdmin()) return;
     const existing = customerById(b.dataset.key);
     const row = customerLedgerList().find(c=>c.key===b.dataset.key);
     openModal(customerFormModal(existing || (row ? { id:null, name:row.name, phone:row.phone, address:'', email:'', notes:'' } : null)));
@@ -2343,6 +2361,7 @@ function attachModalHandlers(){
 
   const saveCustomerBtn = root.querySelector('[data-action="save-customer"]');
   if(saveCustomerBtn) saveCustomerBtn.addEventListener('click', ()=>{
+    if(saveCustomerBtn.dataset.id && !isAdmin()){ alert('Only an admin can edit an existing customer.'); closeModal(); return; }
     const name = document.getElementById('cu-name').value.trim();
     if(!name){ alert('Customer name is required.'); return; }
     const data = {
