@@ -443,6 +443,7 @@ async function loadState(){
   let dirty = false;
   if(migrateProductImeiFields()) dirty = true;
   if(migrateProductCategoryFields()) dirty = true;
+  if(migrateProductTrackImeiFields()) dirty = true;
   if(dirty) saveState();
   renderConnBadge();
 }
@@ -485,6 +486,19 @@ function allCategories(){
   return [...set].sort((a,b)=>a.localeCompare(b));
 }
 function categoryOf(p){ return (p && p.category && p.category.trim()) ? p.category.trim() : 'Uncategorized'; }
+// One-time backfill: older products predate the "track IMEI" toggle. Default
+// them to true so existing serial-tracked shops see no change in behaviour.
+function migrateProductTrackImeiFields(){
+  let changed = false;
+  (state.products||[]).forEach(p=>{
+    if(p.trackImei===undefined){ p.trackImei = true; changed = true; }
+  });
+  return changed;
+}
+function tracksImei(productOrId){
+  const p = (typeof productOrId==='string') ? productById(productOrId) : productOrId;
+  return !p || p.trackImei!==false; // unknown / not-yet-created products default to tracked
+}
 function saveState(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async ()=>{
@@ -922,13 +936,14 @@ function viewProducts(){
         </div>
       </div>
       ${list.length===0 ? emptyState('No products found','Add a product to start tracking stock.') : `
-      <table><thead><tr><th>Product</th><th>Category</th><th>Brand</th><th class="num">Purchase Price</th><th class="num">Sale Price</th><th class="num">Stock</th><th></th></tr></thead>
+      <table><thead><tr><th>Product</th><th>Category</th><th>Brand</th><th>IMEI Tracking</th><th class="num">Purchase Price</th><th class="num">Sale Price</th><th class="num">Stock</th><th></th></tr></thead>
       <tbody>
       ${list.map(p=>`
         <tr>
           <td><strong>${esc(p.name)}</strong>${p.imei?`<div style="font-size:11px;color:var(--ink-soft)">IMEI: ${esc(p.imei)}</div>`:''}${(()=>{ const n=imeiUnitsForProduct(p.id,'in_stock').length; return n>0?`<div style="margin-top:2px;"><span class="pill instock">${n} IMEI in stock</span></div>`:''; })()}</td>
           <td><span class="pill neutral">${esc(categoryOf(p))}</span></td>
           <td>${esc(p.brand||'-')}</td>
+          <td>${p.trackImei!==false ? `<span class="pill info">Yes</span>` : `<span class="pill neutral">No</span>`}</td>
           <td class="num">${money(p.purchasePrice)}</td>
           <td class="num">${money(p.salePrice)}</td>
           <td class="num">${Number(p.stock)<=Number(p.minStock||2) ? `<span class="pill bad">${p.stock}</span>` : p.stock}</td>
@@ -971,7 +986,8 @@ function categoriesModal(){
 }
 
 function productFormModal(existing){
-  const p = existing || { id:null, name:'', brand:'', category:'', imei:'', hsn:'', purchasePrice:'', salePrice:'', stock:0, minStock:2 };
+  const p = existing || { id:null, name:'', brand:'', category:'', imei:'', hsn:'', purchasePrice:'', salePrice:'', stock:0, minStock:2, trackImei:true };
+  const trackImei = p.trackImei!==false;
   const cats = allCategories();
   return `
   <div class="modal-bg" data-close="modal">
@@ -981,7 +997,14 @@ function productFormModal(existing){
         <div class="field" style="grid-column:1/-1;"><label>Product Name (model)</label><input type="text" id="p-name" value="${esc(p.name)}" placeholder="e.g. Samsung Galaxy M14"></div>
         <div class="field"><label>Category</label><input type="text" id="p-category" value="${esc(p.category||'')}" list="p-category-list" placeholder="e.g. Mobiles, Accessories..."><datalist id="p-category-list">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
         <div class="field"><label>Brand</label><input type="text" id="p-brand" value="${esc(p.brand)}"></div>
-        <div class="field"><label>IMEI / Serial (optional)</label><input type="text" id="p-imei" value="${esc(p.imei)}"></div>
+        <div class="field" style="grid-column:1/-1;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="p-track-imei" ${trackImei?'checked':''} style="width:auto;">
+            <span>Track IMEI / Serial numbers for this product</span>
+          </label>
+          <div class="imei-hint" style="margin-top:4px;">Turn this off for products you don't need to track unit-by-unit (accessories, cables, general items). IMEI/Serial then becomes optional and won't be required at purchase or sale.</div>
+        </div>
+        <div class="field" id="p-imei-field-wrap"><label>IMEI / Serial (optional)</label><input type="text" id="p-imei" value="${esc(p.imei)}"></div>
         <div class="field"><label>HSN/SAC Code (for GST invoice)</label><input type="text" id="p-hsn" value="${esc(p.hsn)}" placeholder="e.g. 85171200"></div>
         <div class="field"><label>Purchase Price (₹)</label><input type="number" id="p-purchase" value="${p.purchasePrice}"></div>
         <div class="field"><label>Sale Price (₹, incl. GST)</label><input type="number" id="p-sale" value="${p.salePrice}"></div>
@@ -1156,6 +1179,7 @@ function purchaseItemRow(it,i){
       : `<div class="imei-hint" style="margin:2px 0 8px 0;color:#a56a00;">＋ New product "${esc(typed)}" will be created when you save.</div>`;
   }
   const showHsnField = typed && !it.productId;
+  const needsImei = tracksImei(it.productId || null);
   return `
   <div class="itemrow" data-row="${i}">
     <input type="text" class="pu-product" data-i="${i}" list="pu-product-list-${i}" value="${esc(it.name||'')}" placeholder="Search product, or type a new name…" autocomplete="off">
@@ -1167,11 +1191,12 @@ function purchaseItemRow(it,i){
   <datalist id="pu-product-list-${i}">${state.products.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist>
   ${matchHint}
   ${showHsnField ? `<div class="field" style="margin:2px 0 8px 0;"><label>HSN/SAC Code for new product (optional)</label><input type="text" class="pu-hsn" data-i="${i}" value="${esc(it.hsn||'')}" placeholder="e.g. 85171200"></div>` : ''}
+  ${needsImei ? `
   <div class="imei-box" style="${countOk?'border-color:#bcd8c4;background:var(--good-bg);':''}">
     <label>IMEI / Serial numbers for this line <span style="color:var(--bad);">*</span> — one per line, exactly ${qty} required</label>
     <textarea class="pu-imei" data-i="${i}" rows="3" placeholder="e.g.\n356789012345671\n356789012345672">${esc(it.imeiText)}</textarea>
-    <div class="imei-hint" style="${qty>0 && !countOk?'color:var(--bad);font-weight:600;':''}">${qty>0 ? `${imeiCount} of ${qty} entered${countOk?' — matched':''}` : 'Set a quantity first'} · Every mobile unit must be serial-tracked before it can be purchased or sold.</div>
-  </div>`;
+    <div class="imei-hint" style="${qty>0 && !countOk?'color:var(--bad);font-weight:600;':''}">${qty>0 ? `${imeiCount} of ${qty} entered${countOk?' — matched':''}` : 'Set a quantity first'} · This product is set to track IMEI/serial numbers.</div>
+  </div>` : (it.productId ? `<div class="imei-hint" style="margin:-4px 0 12px 0;">This product isn't set to track IMEI/serial numbers — nothing extra needed here.</div>` : '')}`;
 }
 
 /* =========================================================
@@ -1243,27 +1268,31 @@ function saleItemRow(it,i){
       const marginTotal = marginEach * qty;
       costHint = `<div class="imei-hint" style="margin:-4px 0 8px 0;">Cost price: <strong class="num">${money(cost)}</strong> / unit &nbsp;·&nbsp; Est. margin: <strong class="num" style="color:${marginTotal>=0?'var(--good)':'var(--bad)'}">${money(marginTotal)}</strong></div>`;
     }
-    const availUnits = imeiUnitsForProduct(it.productId,'in_stock');
-    const usedElsewhere = new Set();
-    saleItems.forEach((otherIt,oi)=>{
-      if(oi===i) return;
-      (otherIt.imeiUnitIds||[]).forEach(id=>{ if(id) usedElsewhere.add(id); });
-    });
-    let shortageWarning = '';
-    if(availUnits.length < qty){
-      shortageWarning = `<div class="imei-hint" style="color:var(--bad); font-weight:600; margin:4px 0 8px 0;">Only ${availUnits.length} tracked IMEI unit${availUnits.length===1?'':'s'} in stock for this product — need ${qty}. Add the missing unit(s) via IMEI Tracking → “+ Add IMEI” (or the product's own IMEI/Serial field), or lower the quantity.</div>`;
+    if(tracksImei(prod)){
+      const availUnits = imeiUnitsForProduct(it.productId,'in_stock');
+      const usedElsewhere = new Set();
+      saleItems.forEach((otherIt,oi)=>{
+        if(oi===i) return;
+        (otherIt.imeiUnitIds||[]).forEach(id=>{ if(id) usedElsewhere.add(id); });
+      });
+      let shortageWarning = '';
+      if(availUnits.length < qty){
+        shortageWarning = `<div class="imei-hint" style="color:var(--bad); font-weight:600; margin:4px 0 8px 0;">Only ${availUnits.length} tracked IMEI unit${availUnits.length===1?'':'s'} in stock for this product — need ${qty}. Add the missing unit(s) via IMEI Tracking → “+ Add IMEI” (or the product's own IMEI/Serial field), or lower the quantity.</div>`;
+      }
+      const rows = it.imeiUnitIds.map((val, ui)=>{
+        const usedInThisItem = new Set(it.imeiUnitIds.filter((v,vi)=> vi!==ui && v));
+        const opts = availUnits
+          .filter(u=> u.id===val || (!usedElsewhere.has(u.id) && !usedInThisItem.has(u.id)))
+          .map(u=>`<option value="${u.id}" ${val===u.id?'selected':''}>${esc(u.imei)}</option>`).join('');
+        return `<select class="sa-imei" data-i="${i}" data-u="${ui}" required><option value="">Select IMEI${qty>1?` — unit ${ui+1}`:''}…</option>${opts}</select>`;
+      }).join('');
+      imeiSection = `${shortageWarning}<div class="imei-box">
+        <label>IMEI / Serial <span style="color:var(--bad);">*</span> — required, one per unit sold</label>
+        <div style="display:flex; flex-direction:column; gap:6px;">${rows}</div>
+      </div>`;
+    }else{
+      imeiSection = `<div class="imei-hint" style="margin:-4px 0 8px 0;">This product isn't set to track IMEI/serial numbers — just set quantity and price.</div>`;
     }
-    const rows = it.imeiUnitIds.map((val, ui)=>{
-      const usedInThisItem = new Set(it.imeiUnitIds.filter((v,vi)=> vi!==ui && v));
-      const opts = availUnits
-        .filter(u=> u.id===val || (!usedElsewhere.has(u.id) && !usedInThisItem.has(u.id)))
-        .map(u=>`<option value="${u.id}" ${val===u.id?'selected':''}>${esc(u.imei)}</option>`).join('');
-      return `<select class="sa-imei" data-i="${i}" data-u="${ui}" required><option value="">Select IMEI${qty>1?` — unit ${ui+1}`:''}…</option>${opts}</select>`;
-    }).join('');
-    imeiSection = `${shortageWarning}<div class="imei-box">
-      <label>IMEI / Serial <span style="color:var(--bad);">*</span> — required, one per unit sold</label>
-      <div style="display:flex; flex-direction:column; gap:6px;">${rows}</div>
-    </div>`;
   }
   const noMatchHint = (it.query||'').trim() && !it.productId
     ? `<div class="imei-hint" style="margin:2px 0 8px 0;color:var(--bad);">No product matches "${esc(it.query.trim())}" — check spelling, or add it first on the Products page.</div>`
@@ -2337,11 +2366,13 @@ function doSavePurchase(){
   const invoiceNo = document.getElementById('pu-invno').value.trim() || nextPurchaseNo();
   const paid = Number(document.getElementById('pu-paid').value) || 0;
 
-  // Validate IMEI/serial entry up front — mandatory for every item, exact count, no duplicates.
+  // Validate IMEI/serial entry up front for products that track it — mandatory,
+  // exact count, no duplicates. Products with tracking off skip this entirely.
   const seenInThisPurchase = new Set();
   for(const it of purchaseItems){
     const qty = Number(it.qty)||0;
     if(qty<=0) continue;
+    if(!tracksImei(it.productId || null)) continue;
     const label = it.name.trim() || (it.productId ? productById(it.productId).name : 'this item');
     const list = parseImeiLines(it.imeiText);
     if(list.length !== qty){
@@ -2366,7 +2397,7 @@ function doSavePurchase(){
     if(!productId){
       const name = it.name.trim();
       if(!name) return;
-      const np = { id: uid('p'), name, category:'General', brand:'', imei:'', hsn: (it.hsn||'').trim(), purchasePrice: price, salePrice: Math.round(price*1.1), stock:0, minStock:2 };
+      const np = { id: uid('p'), name, category:'General', trackImei:true, brand:'', imei:'', hsn: (it.hsn||'').trim(), purchasePrice: price, salePrice: Math.round(price*1.1), stock:0, minStock:2 };
       state.products.push(np);
       productId = np.id;
     }
@@ -2374,9 +2405,9 @@ function doSavePurchase(){
     prod.stock = Number(prod.stock||0) + qty;
     prod.purchasePrice = price;
     items.push({ productId, name: prod.name, qty, price });
-    addImeiUnitsFromPurchase(productId, prod.name, it.imeiText, purchaseId, date);
+    if(tracksImei(prod)) addImeiUnitsFromPurchase(productId, prod.name, it.imeiText, purchaseId, date);
   });
-  if(items.length===0){ alert('Add at least one item with quantity, and its required IMEI/serial numbers.'); return; }
+  if(items.length===0){ alert('Add at least one item with quantity (and IMEI/serial numbers, for products that track them).'); return; }
   const total = items.reduce((a,it)=>a+it.qty*it.price,0);
   state.purchases.push({ id: purchaseId, date, invoiceNo, supplier, items, total, paid, due: total-paid });
   state.counters.purchase += 1;
@@ -2412,16 +2443,19 @@ function doSaveSale(){
     const prod = productById(it.productId);
     if(!prod){ return; }
     if(qty > Number(prod.stock)){ error = `Not enough stock for "${prod.name}" (available: ${prod.stock}).`; return; }
-    const ids = (it.imeiUnitIds||[]).filter(Boolean);
-    if(ids.length !== qty){ error = `Select an IMEI/serial for every unit of "${prod.name}" (${ids.length} of ${qty} selected).`; return; }
-    for(const id of ids){
-      if(seenIdsAcrossSale.has(id)){ error = `The same IMEI unit was selected twice for "${prod.name}".`; return; }
-      seenIdsAcrossSale.add(id);
+    let ids = [];
+    if(tracksImei(prod)){
+      ids = (it.imeiUnitIds||[]).filter(Boolean);
+      if(ids.length !== qty){ error = `Select an IMEI/serial for every unit of "${prod.name}" (${ids.length} of ${qty} selected).`; return; }
+      for(const id of ids){
+        if(seenIdsAcrossSale.has(id)){ error = `The same IMEI unit was selected twice for "${prod.name}".`; return; }
+        seenIdsAcrossSale.add(id);
+      }
     }
     items.push({ productId: it.productId, name: prod.name, qty, price, imeiUnitIds: ids });
   });
   if(error){ alert(error); return; }
-  if(items.length===0){ alert('Add at least one item to the bill, with an IMEI/serial selected for each unit.'); return; }
+  if(items.length===0){ alert('Add at least one item to the bill (with an IMEI/serial selected, for products that track them).'); return; }
 
   const subtotal = items.reduce((a,it)=>a+it.qty*it.price,0);
   const total = Math.max(subtotal - discount, 0);
@@ -2501,9 +2535,11 @@ function attachModalHandlers(){
     if(!name){ alert('Product name is required.'); return; }
     const id = saveProdBtn.dataset.id;
     const category = document.getElementById('p-category').value.trim() || 'General';
+    const trackImei = document.getElementById('p-track-imei').checked;
     const data = {
       name,
       category,
+      trackImei,
       brand: document.getElementById('p-brand').value.trim(),
       imei: document.getElementById('p-imei').value.trim(),
       hsn: document.getElementById('p-hsn').value.trim(),
