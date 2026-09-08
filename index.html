@@ -419,6 +419,7 @@ const DEFAULT_STATE = {
   customers: [],
   suppliers: [],
   imeiUnits: [],
+  categories: [],
   counters: { invoice: 1, purchase: 1 }
 };
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -439,7 +440,10 @@ async function loadState(){
     console.error('Firebase load failed', e);
     fbStatus = 'error'; fbError = e.message||'';
   }
-  if(migrateProductImeiFields()) saveState();
+  let dirty = false;
+  if(migrateProductImeiFields()) dirty = true;
+  if(migrateProductCategoryFields()) dirty = true;
+  if(dirty) saveState();
   renderConnBadge();
 }
 // One-time backfill: older data may have an IMEI typed straight into a product's
@@ -458,6 +462,29 @@ function migrateProductImeiFields(){
   });
   return changed;
 }
+// One-time backfill: give every product a category (older data predates this
+// field), and make sure state.categories has an entry for every category in
+// use so the filter/report lists are complete even on first load.
+function migrateProductCategoryFields(){
+  let changed = false;
+  state.categories = state.categories || [];
+  (state.products||[]).forEach(p=>{
+    if(!p.category || !String(p.category).trim()){ p.category = 'General'; changed = true; }
+  });
+  (state.products||[]).forEach(p=>{
+    if(!state.categories.some(c=>c.toLowerCase()===p.category.toLowerCase())){
+      state.categories.push(p.category); changed = true;
+    }
+  });
+  if(state.categories.length===0){ state.categories.push('General'); changed = true; }
+  return changed;
+}
+function allCategories(){
+  const set = new Set((state.categories||[]).map(c=>c.trim()).filter(Boolean));
+  (state.products||[]).forEach(p=>{ if(p.category) set.add(p.category.trim()); });
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+function categoryOf(p){ return (p && p.category && p.category.trim()) ? p.category.trim() : 'Uncategorized'; }
 function saveState(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async ()=>{
@@ -655,6 +682,36 @@ function monthlyReport(ym){
   return { salesM, purchM, totalSales, totalCollected, totalDue, totalPurchase, profit, topProducts };
 }
 
+// Category-wise breakdown for a given month: units sold, revenue, cost,
+// profit from sales, plus units & amount purchased, grouped by product category.
+function categoryWiseReport(ym){
+  const salesM = state.sales.filter(s=>monthKey(s.date)===ym);
+  const purchM = state.purchases.filter(p=>monthKey(p.date)===ym);
+  const map = {};
+  function row(cat){
+    if(!map[cat]) map[cat] = { category:cat, unitsSold:0, revenue:0, cost:0, purchQty:0, purchAmount:0 };
+    return map[cat];
+  }
+  salesM.forEach(s=> s.items.forEach(it=>{
+    const p = productById(it.productId);
+    const cat = categoryOf(p);
+    const qty = Number(it.qty)||0;
+    const r = row(cat);
+    r.unitsSold += qty;
+    r.revenue += qty * (Number(it.price)||0);
+    r.cost += qty * (p ? (Number(p.purchasePrice)||0) : 0);
+  }));
+  purchM.forEach(pu=> pu.items.forEach(it=>{
+    const p = productById(it.productId);
+    const cat = categoryOf(p);
+    const qty = Number(it.qty)||0;
+    const r = row(cat);
+    r.purchQty += qty;
+    r.purchAmount += qty * (Number(it.price)||0);
+  }));
+  return Object.values(map).map(r=>({ ...r, profit: r.revenue - r.cost })).sort((a,b)=> b.revenue - a.revenue);
+}
+
 /* =========================================================
    NAV
    ========================================================= */
@@ -843,21 +900,34 @@ function viewCompany(){
    PRODUCTS
    ========================================================= */
 let productFilter = '';
+let productCategoryFilter = 'all';
 function viewProducts(){
-  const list = state.products.filter(p => !productFilter || (p.name+' '+p.brand).toLowerCase().includes(productFilter.toLowerCase()));
+  let list = state.products.filter(p => !productFilter || (p.name+' '+p.brand+' '+categoryOf(p)).toLowerCase().includes(productFilter.toLowerCase()));
+  if(productCategoryFilter!=='all') list = list.filter(p=> categoryOf(p)===productCategoryFilter);
+  const cats = allCategories();
   return `
     <div class="pagehead">
-      <div><h1>Products & Stock</h1><div class="desc">${state.products.length} products tracked</div></div>
-      <button class="btn primary" data-action="add-product">+ Add Product</button>
+      <div><h1>Products & Stock</h1><div class="desc">${state.products.length} products across ${cats.length} categor${cats.length===1?'y':'ies'}</div></div>
+      <div>
+        <button class="btn ghost" data-action="manage-categories">&#128193; Manage Categories</button>
+        <button class="btn primary" data-action="add-product">+ Add Product</button>
+      </div>
     </div>
     <div class="card">
-      <input class="searchbar" type="text" placeholder="Search product or brand..." id="prod-search" value="${esc(productFilter)}">
-      ${list.length===0 ? emptyState('No products found','Add a phone or accessory to start tracking stock.') : `
-      <table><thead><tr><th>Product</th><th>Brand</th><th class="num">Purchase Price</th><th class="num">Sale Price</th><th class="num">Stock</th><th></th></tr></thead>
+      <div class="row-between" style="margin-bottom:12px;">
+        <input class="searchbar" style="margin-bottom:0;" type="text" placeholder="Search product, brand or category..." id="prod-search" value="${esc(productFilter)}">
+        <div class="filter-tabs">
+          <button data-action="prod-cat-filter" data-cat="all" class="${productCategoryFilter==='all'?'active':''}">All (${state.products.length})</button>
+          ${cats.map(c=>`<button data-action="prod-cat-filter" data-cat="${esc(c)}" class="${productCategoryFilter===c?'active':''}">${esc(c)} (${state.products.filter(p=>categoryOf(p)===c).length})</button>`).join('')}
+        </div>
+      </div>
+      ${list.length===0 ? emptyState('No products found','Add a product to start tracking stock.') : `
+      <table><thead><tr><th>Product</th><th>Category</th><th>Brand</th><th class="num">Purchase Price</th><th class="num">Sale Price</th><th class="num">Stock</th><th></th></tr></thead>
       <tbody>
       ${list.map(p=>`
         <tr>
           <td><strong>${esc(p.name)}</strong>${p.imei?`<div style="font-size:11px;color:var(--ink-soft)">IMEI: ${esc(p.imei)}</div>`:''}${(()=>{ const n=imeiUnitsForProduct(p.id,'in_stock').length; return n>0?`<div style="margin-top:2px;"><span class="pill instock">${n} IMEI in stock</span></div>`:''; })()}</td>
+          <td><span class="pill neutral">${esc(categoryOf(p))}</span></td>
           <td>${esc(p.brand||'-')}</td>
           <td class="num">${money(p.purchasePrice)}</td>
           <td class="num">${money(p.salePrice)}</td>
@@ -869,14 +939,47 @@ function viewProducts(){
   `;
 }
 
+function categoriesModal(){
+  const cats = allCategories();
+  return `
+  <div class="modal-bg" data-close="modal">
+    <div class="modal" data-stop>
+      <div class="modal-head"><h2>Manage Categories</h2><button class="modal-close" data-close="modal">&times;</button></div>
+      <div class="field">
+        <label>Add New Category</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="new-cat-name" placeholder="e.g. Accessories, Chargers, Repairs...">
+          <button class="btn primary" data-action="add-category" style="white-space:nowrap;">+ Add</button>
+        </div>
+      </div>
+      ${cats.length===0 ? emptyState('No categories yet','Add your first category above.') : `
+      <table><thead><tr><th>Category</th><th class="num">Products</th><th></th></tr></thead><tbody>
+      ${cats.map(c=>{
+        const n = state.products.filter(p=>categoryOf(p)===c).length;
+        return `<tr>
+          <td>${esc(c)}</td>
+          <td class="num">${n}</td>
+          <td style="text-align:right;">${n===0 ? `<button class="btn sm danger" data-action="del-category" data-cat="${esc(c)}">Delete</button>` : `<span style="font-size:11px;color:var(--ink-soft);">in use</span>`}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`}
+      <div style="text-align:right; margin-top:12px;">
+        <button class="btn ghost" data-close="modal">Close</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function productFormModal(existing){
-  const p = existing || { id:null, name:'', brand:'', imei:'', hsn:'', purchasePrice:'', salePrice:'', stock:0, minStock:2 };
+  const p = existing || { id:null, name:'', brand:'', category:'', imei:'', hsn:'', purchasePrice:'', salePrice:'', stock:0, minStock:2 };
+  const cats = allCategories();
   return `
   <div class="modal-bg" data-close="modal">
     <div class="modal" data-stop>
       <div class="modal-head"><h2>${existing? 'Edit Product':'Add Product'}</h2><button class="modal-close" data-close="modal">&times;</button></div>
       <div class="grid cols-2">
         <div class="field" style="grid-column:1/-1;"><label>Product Name (model)</label><input type="text" id="p-name" value="${esc(p.name)}" placeholder="e.g. Samsung Galaxy M14"></div>
+        <div class="field"><label>Category</label><input type="text" id="p-category" value="${esc(p.category||'')}" list="p-category-list" placeholder="e.g. Mobiles, Accessories..."><datalist id="p-category-list">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
         <div class="field"><label>Brand</label><input type="text" id="p-brand" value="${esc(p.brand)}"></div>
         <div class="field"><label>IMEI / Serial (optional)</label><input type="text" id="p-imei" value="${esc(p.imei)}"></div>
         <div class="field"><label>HSN/SAC Code (for GST invoice)</label><input type="text" id="p-hsn" value="${esc(p.hsn)}" placeholder="e.g. 85171200"></div>
@@ -1378,6 +1481,7 @@ function printStatement(type, key, name, phone){
 let reportMonth = todayISO().slice(0,7);
 function viewReports(){
   const rep = monthlyReport(reportMonth);
+  const catRep = categoryWiseReport(reportMonth);
   return `
     <div class="pagehead">
       <div><h1>Monthly Reports</h1><div class="desc">Sales, purchases & profit summary</div></div>
@@ -1388,6 +1492,28 @@ function viewReports(){
       <div class="kpi"><div class="label">Collected</div><div class="value">${money(rep.totalCollected)}</div><div class="sub">Pending ${money(rep.totalDue)}</div></div>
       <div class="kpi"><div class="label">Purchases</div><div class="value">${money(rep.totalPurchase)}</div><div class="sub">${rep.purchM.length} entries</div></div>
       <div class="kpi"><div class="label">Est. Profit</div><div class="value" style="color:var(--good)">${money(rep.profit)}</div><div class="sub">Sales − cost of goods</div></div>
+    </div>
+    <div class="card">
+      <div class="row-between"><h2>Category-wise Report</h2><button class="btn ghost sm" data-action="export-category-report">&#8681; Export CSV</button></div>
+      ${catRep.length===0 ? emptyState('No activity this month','Category totals will appear once you sell or purchase stock.') : `
+      <table><thead><tr><th>Category</th><th class="num">Units Sold</th><th class="num">Sales Revenue</th><th class="num">Est. Profit</th><th class="num">Units Purchased</th><th class="num">Purchase Amount</th></tr></thead><tbody>
+      ${catRep.map(r=>`<tr>
+        <td><span class="pill neutral">${esc(r.category)}</span></td>
+        <td class="num">${r.unitsSold}</td>
+        <td class="num">${money(r.revenue)}</td>
+        <td class="num" style="color:${r.profit>=0?'var(--good)':'var(--bad)'}">${money(r.profit)}</td>
+        <td class="num">${r.purchQty}</td>
+        <td class="num">${money(r.purchAmount)}</td>
+      </tr>`).join('')}
+      <tr style="font-weight:700;">
+        <td>Total</td>
+        <td class="num">${catRep.reduce((a,r)=>a+r.unitsSold,0)}</td>
+        <td class="num">${money(catRep.reduce((a,r)=>a+r.revenue,0))}</td>
+        <td class="num">${money(catRep.reduce((a,r)=>a+r.profit,0))}</td>
+        <td class="num">${catRep.reduce((a,r)=>a+r.purchQty,0)}</td>
+        <td class="num">${money(catRep.reduce((a,r)=>a+r.purchAmount,0))}</td>
+      </tr>
+      </tbody></table>`}
     </div>
     <div class="grid cols-2">
       <div class="card">
@@ -1406,6 +1532,21 @@ function viewReports(){
       </div>
     </div>
   `;
+}
+function categoryReportToCsv(ym){
+  const catRep = categoryWiseReport(ym);
+  const rows = [['Category','Units Sold','Sales Revenue','Est. Profit','Units Purchased','Purchase Amount']];
+  catRep.forEach(r=> rows.push([r.category, r.unitsSold, r.revenue, r.profit, r.purchQty, r.purchAmount]));
+  return rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+}
+function exportCategoryReportCsv(){
+  const csv = categoryReportToCsv(reportMonth);
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `category-report-${reportMonth}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /* =========================================================
@@ -1987,8 +2128,11 @@ function attachHandlers(){
   // Products
   const prodSearch = main.querySelector('#prod-search');
   if(prodSearch) prodSearch.addEventListener('input', e=>{ productFilter = e.target.value; render(); });
+  main.querySelectorAll('[data-action="prod-cat-filter"]').forEach(b=>b.addEventListener('click', ()=>{ productCategoryFilter = b.dataset.cat; render(); }));
   const addProdBtn = main.querySelector('[data-action="add-product"]');
   if(addProdBtn) addProdBtn.addEventListener('click', ()=> openModal(productFormModal(null)));
+  const manageCatBtn = main.querySelector('[data-action="manage-categories"]');
+  if(manageCatBtn) manageCatBtn.addEventListener('click', ()=> openModal(categoriesModal()));
   main.querySelectorAll('[data-action="edit-product"]').forEach(b=>b.addEventListener('click', ()=>{
     if(!isAdmin()) return;
     openModal(productFormModal(productById(b.dataset.id)));
@@ -2164,6 +2308,8 @@ function attachHandlers(){
   // Reports
   const repMonth = main.querySelector('#report-month');
   if(repMonth) repMonth.addEventListener('change', e=>{ reportMonth = e.target.value; render(); });
+  const exportCatRepBtn = main.querySelector('[data-action="export-category-report"]');
+  if(exportCatRepBtn) exportCatRepBtn.addEventListener('click', exportCategoryReportCsv);
 }
 
 function syncPurchaseTotalsOnly(){
@@ -2220,7 +2366,7 @@ function doSavePurchase(){
     if(!productId){
       const name = it.name.trim();
       if(!name) return;
-      const np = { id: uid('p'), name, brand:'', imei:'', hsn: (it.hsn||'').trim(), purchasePrice: price, salePrice: Math.round(price*1.1), stock:0, minStock:2 };
+      const np = { id: uid('p'), name, category:'General', brand:'', imei:'', hsn: (it.hsn||'').trim(), purchasePrice: price, salePrice: Math.round(price*1.1), stock:0, minStock:2 };
       state.products.push(np);
       productId = np.id;
     }
@@ -2354,8 +2500,10 @@ function attachModalHandlers(){
     const name = document.getElementById('p-name').value.trim();
     if(!name){ alert('Product name is required.'); return; }
     const id = saveProdBtn.dataset.id;
+    const category = document.getElementById('p-category').value.trim() || 'General';
     const data = {
       name,
+      category,
       brand: document.getElementById('p-brand').value.trim(),
       imei: document.getElementById('p-imei').value.trim(),
       hsn: document.getElementById('p-hsn').value.trim(),
@@ -2373,8 +2521,28 @@ function attachModalHandlers(){
       state.products.push(np);
       syncProductImeiField(np);
     }
+    state.categories = state.categories || [];
+    if(!state.categories.some(c=>c.toLowerCase()===category.toLowerCase())) state.categories.push(category);
     saveState(); closeModal(); render();
   });
+
+  const addCatBtn = root.querySelector('[data-action="add-category"]');
+  if(addCatBtn) addCatBtn.addEventListener('click', ()=>{
+    const inp = document.getElementById('new-cat-name');
+    const name = (inp.value||'').trim();
+    if(!name){ alert('Enter a category name.'); return; }
+    state.categories = state.categories || [];
+    if(state.categories.some(c=>c.toLowerCase()===name.toLowerCase())){ alert('That category already exists.'); return; }
+    state.categories.push(name);
+    saveState(); openModal(categoriesModal());
+  });
+  root.querySelectorAll('[data-action="del-category"]').forEach(b=>b.addEventListener('click', ()=>{
+    const cat = b.dataset.cat;
+    if(state.products.some(p=>categoryOf(p)===cat)){ alert('Cannot delete a category that is still in use.'); return; }
+    if(!confirm(`Delete category "${cat}"?`)) return;
+    state.categories = (state.categories||[]).filter(c=>c!==cat);
+    saveState(); openModal(categoriesModal());
+  }));
 
   const saveImeiBtn = root.querySelector('[data-action="save-imei"]');
   if(saveImeiBtn) saveImeiBtn.addEventListener('click', ()=>{
