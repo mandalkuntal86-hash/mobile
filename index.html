@@ -835,7 +835,7 @@ function viewProducts(){
           <td class="num">${money(p.purchasePrice)}</td>
           <td class="num">${money(p.salePrice)}</td>
           <td class="num">${Number(p.stock)<=Number(p.minStock||2) ? `<span class="pill bad">${p.stock}</span>` : p.stock}</td>
-          <td style="text-align:right;"><button class="btn sm ghost" data-action="edit-product" data-id="${p.id}">Edit</button> <button class="btn sm danger" data-action="del-product" data-id="${p.id}">Delete</button></td>
+          <td style="text-align:right;">${isAdmin() ? `<button class="btn sm ghost" data-action="edit-product" data-id="${p.id}">Edit</button> <button class="btn sm danger" data-action="del-product" data-id="${p.id}">Delete</button>` : ''}</td>
         </tr>`).join('')}
       </tbody></table>`}
     </div>
@@ -1007,7 +1007,7 @@ function viewPurchase(){
       ${recent.length===0? emptyState('No purchases yet','Recorded purchases will show up here.') : `
       <table><thead><tr><th>Date</th><th>Invoice</th><th>Supplier</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody>
       ${recent.map(p=>`<tr><td>${fmtDate(p.date)}</td><td class="num">${p.invoiceNo}</td><td>${esc(p.supplier)}</td><td class="num">${money(p.total)}</td><td class="num">${money(p.paid)}</td><td>${dueStatusPill(p.total-p.paid)}</td><td style="text-align:right; white-space:nowrap;">
-        ${isAdmin() ? `<button class="btn sm danger" data-action="del-purchase" data-id="${p.id}">Delete</button>` : ''}
+        ${isAdmin() ? `<button class="btn sm ghost" data-action="edit-purchase" data-id="${p.id}">Edit</button> <button class="btn sm danger" data-action="del-purchase" data-id="${p.id}">Delete</button>` : ''}
       </td></tr>`).join('')}
       </tbody></table>`}
     </div>
@@ -1047,6 +1047,7 @@ function purchaseItemRow(it,i){
    SALES / BILLING
    ========================================================= */
 let saleItems = [];
+let saleCustomerDraft = { name:'', phone:'', address:'', paid:'' };
 function viewSales(){
   if(saleItems.length===0) saleItems = [{ productId:'', qty:1, price:0, imeiUnitIds:[], query:'' }];
   const recent = [...state.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo)).slice(0,10);
@@ -1055,11 +1056,11 @@ function viewSales(){
     <div class="pagehead"><div><h1>Billing / Sale</h1><div class="desc">Create a new customer bill</div></div></div>
     <div class="card">
       <div class="grid cols-3">
-        <div class="field"><label>Customer Name</label><input type="text" id="sa-customer" list="sa-customer-list" placeholder="Walk-in customer" autocomplete="off"></div>
-        <div class="field"><label>Phone Number</label><input type="tel" id="sa-phone" list="sa-phone-list" autocomplete="off"></div>
+        <div class="field"><label>Customer Name</label><input type="text" id="sa-customer" list="sa-customer-list" value="${esc(saleCustomerDraft.name)}" placeholder="Walk-in customer" autocomplete="off"></div>
+        <div class="field"><label>Phone Number</label><input type="tel" id="sa-phone" list="sa-phone-list" value="${esc(saleCustomerDraft.phone)}" autocomplete="off"></div>
         <div class="field"><label>Bill Date</label><input type="date" id="sa-date" value="${todayISO()}"></div>
       </div>
-      <div class="field"><label>Customer Address (optional, for GST invoice)</label><input type="text" id="sa-address" placeholder="e.g. Bagdah, North 24 Parganas"></div>
+      <div class="field"><label>Customer Address (optional, for GST invoice)</label><input type="text" id="sa-address" value="${esc(saleCustomerDraft.address)}" placeholder="e.g. Bagdah, North 24 Parganas"></div>
       <datalist id="sa-customer-list">${customerLedgerList().filter(c=>c.key!=='walk-in').map(c=>`<option value="${esc(c.name)}">${c.phone?esc(c.phone):''}</option>`).join('')}</datalist>
       <datalist id="sa-phone-list">${customerLedgerList().filter(c=>c.key!=='walk-in' && c.phone).map(c=>`<option value="${esc(c.phone)}">${esc(c.name)}</option>`).join('')}</datalist>
       <div class="imei-hint" style="margin:-8px 0 12px 0;">Start typing to pick an existing customer, or just type a new name/phone — it'll be added to your Customer Ledger automatically when you save this bill.</div>
@@ -1071,7 +1072,7 @@ function viewSales(){
 
       <div class="grid cols-4" style="margin-top:16px;">
         <div class="field"><label>Discount (₹)</label><input type="number" id="sa-discount" value="0"></div>
-        <div class="field"><label>Amount Paid (₹)</label><input type="number" id="sa-paid" value="${subtotal}"></div>
+        <div class="field"><label>Amount Paid (₹)</label><input type="number" id="sa-paid" value="${esc(saleCustomerDraft.paid)}" placeholder="0"></div>
         <div class="field"><label>Payment Mode</label>
           <select id="sa-mode"><option>Cash</option><option>UPI</option><option>Card</option><option>Credit / Due</option></select>
         </div>
@@ -1600,6 +1601,61 @@ function doDeletePurchase(purchaseId){
   render();
 }
 
+let editPurchaseId = null;
+function openEditPurchase(purchaseId){
+  if(!isAdmin()) return;
+  const p = state.purchases.find(x=>x.id===purchaseId);
+  if(!p) return;
+  editPurchaseId = purchaseId;
+  openModal(editPurchaseModalHtml(p));
+}
+function editPurchaseModalHtml(p){
+  return `
+  <div class="modal-bg" data-close="modal">
+    <div class="modal" data-stop>
+      <div class="modal-head"><h2>Edit Purchase — ${esc(p.invoiceNo)}</h2><button class="modal-close" data-close="modal">&times;</button></div>
+      <div class="imei-hint" style="margin:-4px 0 12px 0;">Supplier, date, invoice # and amount paid can be corrected here. To change the items or quantities on this purchase, delete it and re-enter it instead — this keeps stock and IMEI/serial records accurate.</div>
+      <div class="grid cols-2">
+        <div class="field"><label>Supplier Name</label><input type="text" id="ep-supplier" value="${esc(p.supplier)}"></div>
+        <div class="field"><label>Purchase Date</label><input type="date" id="ep-date" value="${p.date}"></div>
+        <div class="field"><label>Purchase Invoice #</label><input type="text" id="ep-invno" value="${esc(p.invoiceNo)}"></div>
+        <div class="field"><label>Amount Paid (₹)</label><input type="number" id="ep-paid" value="${p.paid}"></div>
+      </div>
+      <h3 style="margin-top:8px;">Items</h3>
+      <table><thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Price ea.</th><th class="num">Line total</th></tr></thead><tbody>
+      ${p.items.map(it=>`<tr><td>${esc(it.name)}</td><td class="num">${it.qty}</td><td class="num">${money(it.price)}</td><td class="num">${money(it.qty*it.price)}</td></tr>`).join('')}
+      </tbody></table>
+      <div style="text-align:right; margin-top:8px;">
+        <button class="btn ghost" data-close="modal">Cancel</button>
+        <button class="btn primary" data-action="save-edit-purchase" data-id="${p.id}">Save Changes</button>
+      </div>
+    </div>
+  </div>`;
+}
+function doSaveEditedPurchase(){
+  if(!isAdmin()) return;
+  const p = state.purchases.find(x=>x.id===editPurchaseId);
+  if(!p) return;
+  const supplier = document.getElementById('ep-supplier').value.trim();
+  if(!supplier){ alert('Please enter a supplier name.'); return; }
+  const date = document.getElementById('ep-date').value || p.date;
+  const invoiceNo = document.getElementById('ep-invno').value.trim() || p.invoiceNo;
+  let paid = Number(document.getElementById('ep-paid').value);
+  if(isNaN(paid)) paid = p.paid;
+
+  p.supplier = supplier;
+  p.date = date;
+  p.invoiceNo = invoiceNo;
+  p.paid = paid;
+  p.due = p.total - paid;
+  // Keep any IMEI/serial units linked to this purchase in sync with the corrected date.
+  (state.imeiUnits||[]).forEach(u=>{ if(u.purchaseId===p.id) u.purchaseDate = date; });
+
+  saveState();
+  closeModal();
+  render();
+}
+
 /* =========================================================
    PRINT INVOICE
    ========================================================= */
@@ -1870,9 +1926,11 @@ function attachHandlers(){
   const addProdBtn = main.querySelector('[data-action="add-product"]');
   if(addProdBtn) addProdBtn.addEventListener('click', ()=> openModal(productFormModal(null)));
   main.querySelectorAll('[data-action="edit-product"]').forEach(b=>b.addEventListener('click', ()=>{
+    if(!isAdmin()) return;
     openModal(productFormModal(productById(b.dataset.id)));
   }));
   main.querySelectorAll('[data-action="del-product"]').forEach(b=>b.addEventListener('click', ()=>{
+    if(!isAdmin()) return;
     if(confirm('Delete this product? This cannot be undone.')){
       state.products = state.products.filter(p=>p.id!==b.dataset.id);
       saveState(); render();
@@ -1976,12 +2034,19 @@ function attachHandlers(){
   const saCustomerInp = main.querySelector('#sa-customer');
   const saPhoneInp = main.querySelector('#sa-phone');
   const saAddressInp = main.querySelector('#sa-address');
+  const saPaidInp = main.querySelector('#sa-paid');
   function fillFromCustomer(c){
     if(!c) return;
-    if(saCustomerInp && c.name) saCustomerInp.value = c.name;
-    if(saPhoneInp && c.phone) saPhoneInp.value = c.phone;
-    if(saAddressInp && !saAddressInp.value && c.address) saAddressInp.value = c.address;
+    if(saCustomerInp && c.name){ saCustomerInp.value = c.name; saleCustomerDraft.name = c.name; }
+    if(saPhoneInp && c.phone){ saPhoneInp.value = c.phone; saleCustomerDraft.phone = c.phone; }
+    if(saAddressInp && !saAddressInp.value && c.address){ saAddressInp.value = c.address; saleCustomerDraft.address = c.address; }
   }
+  // Keep customer/phone/address/paid in a draft that survives re-renders
+  // (item add/remove, IMEI selection, etc. re-render this whole form).
+  if(saCustomerInp) saCustomerInp.addEventListener('input', e=> saleCustomerDraft.name = e.target.value);
+  if(saPhoneInp) saPhoneInp.addEventListener('input', e=> saleCustomerDraft.phone = e.target.value);
+  if(saAddressInp) saAddressInp.addEventListener('input', e=> saleCustomerDraft.address = e.target.value);
+  if(saPaidInp) saPaidInp.addEventListener('input', e=> saleCustomerDraft.paid = e.target.value);
   if(saCustomerInp) saCustomerInp.addEventListener('change', e=>{
     const match = customerLedgerList().find(c=> c.key!=='walk-in' && c.name.toLowerCase()===e.target.value.trim().toLowerCase());
     if(match) fillFromCustomer(match);
@@ -1993,6 +2058,7 @@ function attachHandlers(){
   main.querySelectorAll('[data-action="print-sale"]').forEach(b=>b.addEventListener('click', ()=> printInvoice(b.dataset.id)));
   main.querySelectorAll('[data-action="edit-sale"]').forEach(b=>b.addEventListener('click', ()=> openEditSale(b.dataset.id)));
   main.querySelectorAll('[data-action="del-sale"]').forEach(b=>b.addEventListener('click', ()=> doDeleteSale(b.dataset.id)));
+  main.querySelectorAll('[data-action="edit-purchase"]').forEach(b=>b.addEventListener('click', ()=> openEditPurchase(b.dataset.id)));
   main.querySelectorAll('[data-action="del-purchase"]').forEach(b=>b.addEventListener('click', ()=> doDeletePurchase(b.dataset.id)));
 
   // Users (admin-only)
@@ -2147,6 +2213,7 @@ function doSaveSale(){
   items.forEach(it=>{ (it.imeiUnitIds||[]).forEach(id=> markImeiUnitSold(id, sale.id, date, customer, customerPhone)); });
 
   saleItems = [];
+  saleCustomerDraft = { name:'', phone:'', address:'', paid:'' };
   saveState();
   activeTab = 'sales';
   render();
@@ -2199,6 +2266,7 @@ function attachModalHandlers(){
 
   const saveProdBtn = root.querySelector('[data-action="save-product"]');
   if(saveProdBtn) saveProdBtn.addEventListener('click', ()=>{
+    if(saveProdBtn.dataset.id && !isAdmin()){ alert('Only an admin can edit products.'); closeModal(); return; }
     const name = document.getElementById('p-name').value.trim();
     if(!name){ alert('Product name is required.'); return; }
     const id = saveProdBtn.dataset.id;
@@ -2342,6 +2410,10 @@ function attachModalHandlers(){
     const match = customerLedgerList().find(c=> c.phone && c.phone===e.target.value.trim());
     if(match) esFillFromCustomer(match);
   });
+
+  // Edit-purchase modal (admin-only)
+  const saveEditPurchaseBtn = root.querySelector('[data-action="save-edit-purchase"]');
+  if(saveEditPurchaseBtn) saveEditPurchaseBtn.addEventListener('click', doSaveEditedPurchase);
 
   // Add-user modal (admin-only) — stored directly in state.users, no external auth service needed.
   const saveUserBtn = root.querySelector('[data-action="save-user"]');
