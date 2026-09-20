@@ -1856,14 +1856,20 @@ function openEditPurchase(purchaseId){
   const p = state.purchases.find(x=>x.id===purchaseId);
   if(!p) return;
   editPurchaseId = purchaseId;
-  editPurchaseItems = p.items.map(it=>({
-    productId: it.productId || '',
-    name: it.name || '',
-    qty: it.qty,
-    price: it.price,
-    imeiText: '',
-    hsn: it.productId ? (productById(it.productId)?.hsn || '') : ''
-  }));
+  editPurchaseItems = p.items.map(it=>{
+    const imeiText = (state.imeiUnits||[])
+      .filter(u => u.purchaseId===purchaseId && (u.productId===it.productId || u.productName===it.name || (!it.productId && !u.productId)))
+      .map(u => u.imei)
+      .join('\n');
+    return {
+      productId: it.productId || '',
+      name: it.name || '',
+      qty: it.qty,
+      price: it.price,
+      imeiText,
+      hsn: it.productId ? (productById(it.productId)?.hsn || '') : ''
+    };
+  });
   openModal(editPurchaseModalHtml(p));
 }
 function editPurchaseItemRow(it,i){
@@ -1936,6 +1942,7 @@ function doSaveEditedPurchase(){
   if(isNaN(paid)) paid = p.paid;
 
   const items = [];
+  const seenInThisEdit = new Set();
   for(const it of editPurchaseItems){
     const qty = Number(it.qty)||0;
     if(qty<=0) continue;
@@ -1951,6 +1958,19 @@ function doSaveEditedPurchase(){
     if(!prod) continue;
     prod.name = prod.name || (it.name||'');
     prod.purchasePrice = Number(it.price)||0;
+    if(tracksImei(prod)){
+      const imeis = parseImeiLines(it.imeiText);
+      if(imeis.length !== qty){
+        alert(`Enter exactly ${qty} IMEI/serial number${qty===1?'':'s'} for "${prod.name}" before saving.`);
+        return;
+      }
+      for(const imei of imeis){
+        const key = imei.toLowerCase();
+        if(seenInThisEdit.has(key)){ alert(`Duplicate IMEI "${imei}" entered more than once in this purchase edit.`); return; }
+        seenInThisEdit.add(key);
+        if((state.imeiUnits||[]).some(u=>u.imei.toLowerCase()===key && u.purchaseId!==p.id)){ alert(`IMEI "${imei}" already exists in IMEI Tracking. Each unit must be unique.`); return; }
+      }
+    }
     items.push({ productId, name: prod.name, qty, price: Number(it.price)||0 });
   }
   if(items.length===0){ alert('Add at least one valid item with quantity.'); return; }
@@ -2823,11 +2843,17 @@ function attachModalHandlers(){
         editPurchaseItems[i].productId = '';
       }
     });
-    inp.addEventListener('change', ()=> openModal(editPurchaseModalHtml(state.purchases.find(x=>x.id===editPurchaseId))));
+    inp.addEventListener('change', e=>{
+      const i = Number(e.target.dataset.i);
+      const current = document.querySelector(`.ep-imei[data-i="${i}"]`);
+      if(current) editPurchaseItems[i].imeiText = current.value;
+      openModal(editPurchaseModalHtml(state.purchases.find(x=>x.id===editPurchaseId)));
+    });
   });
   root.querySelectorAll('.ep-qty').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].qty = e.target.value; }));
   root.querySelectorAll('.ep-price').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].price = e.target.value; }));
   root.querySelectorAll('.ep-hsn').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].hsn = e.target.value; }));
+  root.querySelectorAll('.ep-imei').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].imeiText = e.target.value; }));
   const saveEditPurchaseBtn = root.querySelector('[data-action="save-edit-purchase"]');
   if(saveEditPurchaseBtn) saveEditPurchaseBtn.addEventListener('click', doSaveEditedPurchase);
 
