@@ -1857,10 +1857,11 @@ function openEditPurchase(purchaseId){
   if(!p) return;
   editPurchaseId = purchaseId;
   editPurchaseItems = p.items.map(it=>{
-    const imeiText = (state.imeiUnits||[])
+    const matches = (state.imeiUnits||[])
       .filter(u => u.purchaseId===purchaseId && (u.productId===it.productId || u.productName===it.name || (!it.productId && !u.productId)))
-      .map(u => u.imei)
-      .join('\n');
+      .map(u => u.imei);
+    const qtyLimit = Math.max(Number(it.qty)||0, 0);
+    const imeiText = matches.slice(0, qtyLimit).join('\n');
     return {
       productId: it.productId || '',
       name: it.name || '',
