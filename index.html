@@ -83,6 +83,15 @@
   .pagehead h1{ font-size:24px; }
   .pagehead .desc{ color:var(--ink-soft); font-size:13px; margin-top:2px;}
 
+  .report-range-box{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:rgba(255,255,255,.7); border:1px solid var(--line); border-radius:10px;
+    padding:8px 10px; box-shadow:var(--shadow);
+  }
+  .report-range-box .range-label{ font-size:12px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-right:4px; }
+  .report-range-box input[type="date"]{ width:170px; min-width:150px; }
+  .report-range-box .range-sep{ color:var(--ink-soft); font-weight:700; }
+
   .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin-bottom:18px; transition:box-shadow .15s ease; }
   .card h2{ font-size:16px; margin-bottom:14px; }
   .card h3{ font-size:14px; margin-bottom:10px;}
@@ -701,9 +710,9 @@ function partyTransactions(type, key){
 
 function monthKey(iso){ return iso.slice(0,7); }
 
-function monthlyReport(ym){
-  const salesM = state.sales.filter(s=>monthKey(s.date)===ym);
-  const purchM = state.purchases.filter(p=>monthKey(p.date)===ym);
+function monthlyReport(startDate, endDate){
+  const salesM = state.sales.filter(s=>inDateRange(s.date, startDate, endDate));
+  const purchM = state.purchases.filter(p=>inDateRange(p.date, startDate, endDate));
   const totalSales = salesM.reduce((a,s)=>a+s.total,0);
   const totalCollected = salesM.reduce((a,s)=>a+s.paid,0);
   const totalDue = totalSales - totalCollected;
@@ -723,9 +732,9 @@ function monthlyReport(ym){
 
 // Category-wise breakdown for a given month: units sold, revenue, cost,
 // profit from sales, plus units & amount purchased, grouped by product category.
-function categoryWiseReport(ym){
-  const salesM = state.sales.filter(s=>monthKey(s.date)===ym);
-  const purchM = state.purchases.filter(p=>monthKey(p.date)===ym);
+function categoryWiseReport(startDate, endDate){
+  const salesM = state.sales.filter(s=>inDateRange(s.date, startDate, endDate));
+  const purchM = state.purchases.filter(p=>inDateRange(p.date, startDate, endDate));
   const map = {};
   function row(cat){
     if(!map[cat]) map[cat] = { category:cat, unitsSold:0, revenue:0, cost:0, purchQty:0, purchAmount:0 };
@@ -1590,14 +1599,48 @@ function printStatement(type, key, name, phone){
 /* =========================================================
    REPORTS
    ========================================================= */
-let reportMonth = todayISO().slice(0,7);
+let reportStartDate = (() => {
+  const d = new Date();
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  return first.toISOString().slice(0,10);
+})();
+let reportEndDate = todayISO();
+
+function normalizeDateLimit(value, side){
+  if(!value) return null;
+  const raw = String(value).trim();
+  if(!raw) return null;
+  if(/^\d{4}-\d{2}$/.test(raw)){
+    const [year, month] = raw.split('-').map(Number);
+    if(side==='start') return `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  }
+  return raw.slice(0,10);
+}
+
+function inDateRange(date, start, end){
+  if(!date) return false;
+  const d = String(date).slice(0,10);
+  const startDate = normalizeDateLimit(start, 'start');
+  const endDate = normalizeDateLimit(end, 'end');
+  if(startDate && d < startDate) return false;
+  if(endDate && d > endDate) return false;
+  return true;
+}
+
 function viewReports(){
-  const rep = monthlyReport(reportMonth);
-  const catRep = categoryWiseReport(reportMonth);
+  const rep = monthlyReport(reportStartDate, reportEndDate);
+  const catRep = categoryWiseReport(reportStartDate, reportEndDate);
   return `
     <div class="pagehead">
       <div><h1>Monthly Reports</h1><div class="desc">Sales, purchases & profit summary</div></div>
-      <input type="month" id="report-month" value="${reportMonth}">
+      <div class="report-range-box" aria-label="Report date range">
+        <span class="range-label">From</span>
+        <input type="date" id="report-start-date" value="${reportStartDate}">
+        <span class="range-sep">to</span>
+        <input type="date" id="report-end-date" value="${reportEndDate}">
+      </div>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="label">Total Sales</div><div class="value">${money(rep.totalSales)}</div><div class="sub">${rep.salesM.length} bills</div></div>
@@ -1645,18 +1688,18 @@ function viewReports(){
     </div>
   `;
 }
-function categoryReportToCsv(ym){
-  const catRep = categoryWiseReport(ym);
+function categoryReportToCsv(startDate, endDate){
+  const catRep = categoryWiseReport(startDate, endDate);
   const rows = [['Category','Units Sold','Sales Revenue','Est. Profit','Units Purchased','Purchase Amount']];
   catRep.forEach(r=> rows.push([r.category, r.unitsSold, r.revenue, r.profit, r.purchQty, r.purchAmount]));
   return rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
 }
 function exportCategoryReportCsv(){
-  const csv = categoryReportToCsv(reportMonth);
+  const csv = categoryReportToCsv(reportStartDate, reportEndDate);
   const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `category-report-${reportMonth}.csv`;
+  a.href = url; a.download = `category-report-${reportStartDate}-to-${reportEndDate}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
@@ -2567,8 +2610,21 @@ function attachHandlers(){
   }));
 
   // Reports
-  const repMonth = main.querySelector('#report-month');
-  if(repMonth) repMonth.addEventListener('change', e=>{ reportMonth = e.target.value; render(); });
+  const reportStartInput = main.querySelector('#report-start-date');
+  const reportEndInput = main.querySelector('#report-end-date');
+  const applyReportDates = () => {
+    if(reportStartInput && reportEndInput){
+      if(reportStartInput.value && reportEndInput.value && reportStartInput.value > reportEndInput.value){
+        [reportStartInput.value, reportEndInput.value] = [reportEndInput.value, reportStartInput.value];
+      }
+      reportStartDate = reportStartInput.value || reportStartDate;
+      reportEndDate = reportEndInput.value || reportEndDate;
+      if(reportEndDate < reportStartDate) reportEndDate = reportStartDate;
+    }
+    render();
+  };
+  if(reportStartInput) reportStartInput.addEventListener('change', applyReportDates);
+  if(reportEndInput) reportEndInput.addEventListener('change', applyReportDates);
   const exportCatRepBtn = main.querySelector('[data-action="export-category-report"]');
   if(exportCatRepBtn) exportCatRepBtn.addEventListener('click', exportCategoryReportCsv);
 }
