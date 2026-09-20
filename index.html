@@ -1975,6 +1975,8 @@ function doSaveEditedPurchase(){
 
   const items = [];
   const seenInThisEdit = new Set();
+  state.imeiUnits = (state.imeiUnits||[]).filter(u => u.purchaseId !== p.id);
+
   for(const it of editPurchaseItems){
     const qty = Number(it.qty)||0;
     if(qty<=0) continue;
@@ -2002,6 +2004,7 @@ function doSaveEditedPurchase(){
         seenInThisEdit.add(key);
         if((state.imeiUnits||[]).some(u=>u.imei.toLowerCase()===key && u.purchaseId!==p.id)){ alert(`IMEI "${imei}" already exists in IMEI Tracking. Each unit must be unique.`); return; }
       }
+      addImeiUnitsFromPurchase(productId, prod.name, imeis.join('\n'), p.id, date);
     }
     items.push({ productId, name: prod.name, qty, price: Number(it.price)||0 });
   }
