@@ -599,6 +599,11 @@ function imeiUnitsForProduct(productId, status){
 function parseImeiLines(text){
   return String(text||'').split(/[\n,]/).map(s=>s.trim()).filter(Boolean);
 }
+function normalizeItemQty(value, fallback=1){
+  const n = Number(value);
+  if(!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.max(1, Math.round(n));
+}
 function addImeiUnitsFromPurchase(productId, productName, imeiText, purchaseId, purchaseDate){
   const list = parseImeiLines(imeiText);
   list.forEach(imei=>{
@@ -2323,9 +2328,16 @@ function attachHandlers(){
         purchaseItems[i].productId = '';
       }
     });
-    inp.addEventListener('change', ()=> render());
+    inp.addEventListener('change', e=>{
+      const i = Number(e.target.dataset.i);
+      const qtyInput = document.querySelector(`.pu-qty[data-i="${i}"]`);
+      const imeiInput = document.querySelector(`.pu-imei[data-i="${i}"]`);
+      if(qtyInput) purchaseItems[i].qty = normalizeItemQty(qtyInput.value, Number(purchaseItems[i].qty)||1);
+      if(imeiInput) purchaseItems[i].imeiText = imeiInput.value;
+      render();
+    });
   });
-  main.querySelectorAll('.pu-qty').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].qty = e.target.value; syncPurchaseTotalsOnly(); }));
+  main.querySelectorAll('.pu-qty').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].qty = normalizeItemQty(e.target.value, Number(purchaseItems[Number(e.target.dataset.i)].qty)||1); syncPurchaseTotalsOnly(); }));
   main.querySelectorAll('.pu-qty').forEach(inp=>inp.addEventListener('change', ()=> render()));
   main.querySelectorAll('.pu-price').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].price = e.target.value; syncPurchaseTotalsOnly(); }));
   main.querySelectorAll('.pu-hsn').forEach(inp=>inp.addEventListener('input', e=>{ purchaseItems[Number(e.target.dataset.i)].hsn = e.target.value; }));
@@ -2846,12 +2858,14 @@ function attachModalHandlers(){
     });
     inp.addEventListener('change', e=>{
       const i = Number(e.target.dataset.i);
+      const qtyInput = document.querySelector(`.ep-qty[data-i="${i}"]`);
       const current = document.querySelector(`.ep-imei[data-i="${i}"]`);
+      if(qtyInput) editPurchaseItems[i].qty = normalizeItemQty(qtyInput.value, Number(editPurchaseItems[i].qty)||1);
       if(current) editPurchaseItems[i].imeiText = current.value;
       openModal(editPurchaseModalHtml(state.purchases.find(x=>x.id===editPurchaseId)));
     });
   });
-  root.querySelectorAll('.ep-qty').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].qty = e.target.value; }));
+  root.querySelectorAll('.ep-qty').forEach(inp=>inp.addEventListener('input', e=>{ const i = Number(e.target.dataset.i); editPurchaseItems[i].qty = normalizeItemQty(e.target.value, Number(editPurchaseItems[i].qty)||1); }));
   root.querySelectorAll('.ep-price').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].price = e.target.value; }));
   root.querySelectorAll('.ep-hsn').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].hsn = e.target.value; }));
   root.querySelectorAll('.ep-imei').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].imeiText = e.target.value; }));
