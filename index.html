@@ -615,6 +615,75 @@ function migrateProductTrackImeiFields(){
   });
   return changed;
 }
+function dedupeImeiUnits(){
+  const validProductIds = new Set((state.products||[]).map(p=>p.id));
+  const validPurchaseIds = new Set((state.purchases||[]).map(p=>p.id));
+  const validSaleIds = new Set((state.sales||[]).map(s=>s.id));
+  const seen = new Set();
+  const clean = [];
+  (state.imeiUnits||[]).forEach(u=>{
+    if(!u) return;
+    const imei = String(u.imei||'').trim();
+    const key = imei.toLowerCase();
+    if(!key || !validProductIds.has(u.productId)) return;
+    if(u.purchaseId && !validPurchaseIds.has(u.purchaseId)) return;
+    if(u.saleId && !validSaleIds.has(u.saleId)) return;
+    if(u.status==='sold' && !u.saleId) return;
+    if(u.saleId && u.status !== 'sold') u.status = 'sold';
+    if(seen.has(key)) return;
+    seen.add(key);
+    clean.push({ ...u, imei: imei });
+  });
+  if(clean.length !== (state.imeiUnits||[]).length){ state.imeiUnits = clean; }
+}
+function reconcileProductStocks(){
+  dedupeImeiUnits();
+  (state.products||[]).forEach(p=>{ if(!Number.isFinite(Number(p.stock))) p.stock = 0; p.stock = Number(p.stock)||0; });
+
+  const stockByProduct = {};
+  const trackedPurchasedByProduct = {};
+  const trackedSoldByProduct = {};
+  (state.products||[]).forEach(p=>{ stockByProduct[p.id] = 0; trackedPurchasedByProduct[p.id] = 0; trackedSoldByProduct[p.id] = 0; });
+
+  (state.purchases||[]).forEach(purchase=>{
+    purchase.items.forEach(it=>{
+      const prod = productById(it.productId);
+      if(!prod) return;
+      if(tracksImei(prod)){
+        trackedPurchasedByProduct[prod.id] = (trackedPurchasedByProduct[prod.id]||0) + (Number(it.qty)||0);
+        return;
+      }
+      stockByProduct[prod.id] = (stockByProduct[prod.id]||0) + (Number(it.qty)||0);
+    });
+  });
+
+  (state.sales||[]).forEach(sale=>{
+    sale.items.forEach(it=>{
+      const prod = productById(it.productId);
+      if(!prod) return;
+      if(tracksImei(prod)){
+        trackedSoldByProduct[prod.id] = (trackedSoldByProduct[prod.id]||0) + (Number(it.qty)||0);
+        return;
+      }
+      stockByProduct[prod.id] = (stockByProduct[prod.id]||0) - (Number(it.qty)||0);
+    });
+  });
+
+  (state.products||[]).forEach(p=>{
+    if(tracksImei(p)){
+      const expected = Math.max(0, (trackedPurchasedByProduct[p.id]||0) - (trackedSoldByProduct[p.id]||0));
+      const live = (state.imeiUnits||[]).filter(u => u.productId===p.id && u.status==='in_stock');
+      if(live.length > expected){
+        const extra = live.slice(expected);
+        extra.forEach(u => { u.status = 'stale'; });
+        state.imeiUnits = (state.imeiUnits||[]).filter(u => !(u.productId===p.id && u.status==='stale'));
+      }
+      p.stock = expected;
+    }else{
+      p.stock = Math.max(0, Number(stockByProduct[p.id]||0));
+    }
+  });
+}
 function tracksImei(productOrId){
   const p = (typeof productOrId==='string') ? productById(productOrId) : productOrId;
   return !p || p.trackImei!==false; // unknown / not-yet-created products default to tracked
@@ -916,6 +985,7 @@ function switchTab(tab){ activeTab = tab; render(); }
    RENDER ROOT
    ========================================================= */
 function render(){
+  reconcileProductStocks();
   renderSidebar();
   const main = document.getElementById('main');
   // Preserve focus & cursor position across re-render: typing in a search/filter
@@ -1117,7 +1187,7 @@ function viewProducts(){
       <tbody>
       ${list.map(p=>`
         <tr>
-          <td><strong>${esc(p.name)}</strong>${p.imei?`<div style="font-size:11px;color:var(--ink-soft)">IMEI: ${esc(p.imei)}</div>`:''}${(()=>{ const n=imeiUnitsForProduct(p.id,'in_stock').length; return n>0?`<div style="margin-top:2px;"><span class="pill instock">${n} IMEI in stock</span></div>`:''; })()}</td>
+          <td><strong>${esc(p.name)}</strong>${p.imei?`<div style="font-size:11px;color:var(--ink-soft)">IMEI: ${esc(p.imei)}</div>`:''}${(()=>{ const n = Math.max(0, Number(p.stock)||0); return n>0?`<div style="margin-top:2px;"><span class="pill instock">${n} IMEI in stock</span></div>`:''; })()}</td>
           <td><span class="pill neutral">${esc(categoryOf(p))}</span></td>
           <td>${esc(p.brand||'-')}</td>
           <td>${p.trackImei!==false ? `<span class="pill info">Yes</span>` : `<span class="pill neutral">No</span>`}</td>
@@ -1982,6 +2052,18 @@ function doSaveEditedSale(){
   const discount = Number(document.getElementById('es-discount').value) || 0;
   const paymentMode = document.getElementById('es-mode').value;
 
+  // First clear any stale IMEI sold flags attached to the original sale so they don't
+  // keep counting as in-stock after the bill is edited.
+  (s.items||[]).forEach(it=>{ (it.imeiUnitIds||[]).forEach(id=>{
+    const unit = (state.imeiUnits||[]).find(u=>u.id===id);
+    if(!unit) return;
+    unit.status = 'in_stock';
+    unit.saleId = null;
+    unit.saleDate = null;
+    unit.customer = '';
+    unit.customerPhone = '';
+  }); });
+
   // Return the original items' stock first, so validation below sees true availability
   s.items.forEach(it=>{ const prod = productById(it.productId); if(prod) prod.stock = Number(prod.stock) + it.qty; });
 
@@ -1994,11 +2076,11 @@ function doSaveEditedSale(){
     const prod = productById(it.productId);
     if(!prod) return;
     if(qty > Number(prod.stock)){ error = `Not enough stock for "${prod.name}" (available: ${prod.stock}).`; return; }
-    items.push({ productId: it.productId, name: prod.name, qty, price });
+    items.push({ productId: it.productId, name: prod.name, qty, price, imeiUnitIds: [] });
   });
 
   if(error || items.length===0){
-    // undo the stock-return above since we're bailing out
+    // undo stock-return above since we're bailing out
     s.items.forEach(it=>{ const prod = productById(it.productId); if(prod) prod.stock = Number(prod.stock) - it.qty; });
     alert(error || 'Add at least one item to the bill.');
     return;
