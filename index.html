@@ -2181,6 +2181,12 @@ function doSaveEditedPurchase(){
 
   const items = [];
   const seenInThisEdit = new Set();
+
+  // Remove the old purchase's stock and IMEI records before re-adding the edited set.
+  p.items.forEach(it=>{
+    const prod = productById(it.productId);
+    if(prod) prod.stock = Math.max(0, Number(prod.stock||0) - (Number(it.qty)||0));
+  });
   state.imeiUnits = (state.imeiUnits||[]).filter(u => u.purchaseId !== p.id);
 
   for(const it of editPurchaseItems){
@@ -2198,6 +2204,7 @@ function doSaveEditedPurchase(){
     if(!prod) continue;
     prod.name = prod.name || (it.name||'');
     prod.purchasePrice = Number(it.price)||0;
+    prod.stock = Number(prod.stock||0) + qty;
     if(tracksImei(prod)){
       const imeis = parseImeiLines(it.imeiText);
       if(imeis.length !== qty){
