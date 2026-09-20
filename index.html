@@ -141,6 +141,26 @@
   .kpi .value{ font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; }
   .kpi .sub{ font-size:11.5px; color:var(--ink-soft); margin-top:4px;}
 
+  .hero-panel{
+    background:linear-gradient(135deg, rgba(25,69,164,.96), rgba(11,43,99,.96));
+    border-radius:16px; padding:20px 22px; margin-bottom:18px; color:#fff; box-shadow:0 12px 28px rgba(31,65,140,.22);
+    display:grid; grid-template-columns:1.4fr .9fr; gap:18px; align-items:center;
+  }
+  .hero-panel .eyebrow{ font-size:11px; text-transform:uppercase; letter-spacing:.12em; opacity:.8; margin-bottom:8px; }
+  .hero-panel h1{ font-size:32px; margin:0; color:#fff; }
+  .hero-panel .desc{ margin-top:8px; color:rgba(255,255,255,.82); font-size:13px; }
+  .hero-metrics{ display:grid; grid-template-columns:repeat(3, minmax(110px,1fr)); gap:10px; }
+  .mini-stat{ background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:12px 10px; }
+  .mini-stat span{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:.08em; opacity:.7; margin-bottom:4px; }
+  .mini-stat strong{ font-family:'IBM Plex Mono',monospace; font-size:18px; }
+  .quick-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+  .quick-card{ background:linear-gradient(180deg, #ffffff, #f4f8ff); border:1px solid var(--line); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); }
+  .quick-card .icon{ width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; background:var(--accent-soft); color:var(--accent); font-size:16px; margin-bottom:10px; }
+  .quick-card h3{ font-size:17px; margin:0 0 6px 0; }
+  .quick-card p{ margin:0; color:var(--ink-soft); font-size:12.5px; line-height:1.45; }
+  @media (max-width:900px){ .hero-panel{ grid-template-columns:1fr; } .hero-metrics{ grid-template-columns:repeat(3,1fr); } .quick-grid{ grid-template-columns:1fr 1fr; } }
+  @media (max-width:640px){ .quick-grid{ grid-template-columns:1fr; } }
+
   .itemrow{ display:grid; grid-template-columns:2.4fr .8fr .9fr .9fr 30px; gap:8px; align-items:end; margin-bottom:8px; }
   .itemrow .rm{ color:var(--bad); background:none; border:none; font-size:18px; line-height:1; padding:6px; }
   .itemhead{ display:grid; grid-template-columns:2.4fr .8fr .9fr .9fr 30px; gap:8px; font-size:11px; color:var(--ink-soft); margin-bottom:4px; text-transform:uppercase; letter-spacing:.03em;}
@@ -839,11 +859,25 @@ function viewDashboard(){
   const suppDue = supplierLedgerList().reduce((a,c)=>a+Math.max(c.due,0),0);
   const lowStock = state.products.filter(p => Number(p.stock) <= Number(p.minStock||2));
   const recentSales = [...state.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo)).slice(0,6);
+  const todayCollected = salesToday.reduce((a,s)=>a+Number(s.paid||0),0);
+  const dueCustomers = customerLedgerList().filter(c=>Number(c.due)>0).length;
 
   return `
     <div class="pagehead">
       <div><h1>Dashboard</h1><div class="desc">${fmtDate(today)} — overview of your shop today</div></div>
       <button class="btn primary" data-action="go-sales">+ New Sale</button>
+    </div>
+    <div class="hero-panel">
+      <div>
+        <div class="eyebrow">Shop pulse</div>
+        <h1>Business overview</h1>
+        <div class="desc">Track sales, dues, stock, and your daily shop momentum from one smart dashboard.</div>
+      </div>
+      <div class="hero-metrics">
+        <div class="mini-stat"><span>Collected</span><strong>${money(todayCollected)}</strong></div>
+        <div class="mini-stat"><span>Due buyers</span><strong>${dueCustomers}</strong></div>
+        <div class="mini-stat"><span>Low stock</span><strong>${lowStock.length}</strong></div>
+      </div>
     </div>
     <div class="kpis">
       <div class="kpi info"><div class="label">Today's Sales</div><div class="value">${money(salesToday.reduce((a,s)=>a+s.total,0))}</div><div class="sub">${salesToday.length} bill${salesToday.length===1?'':'s'}</div></div>
@@ -851,12 +885,18 @@ function viewDashboard(){
       <div class="kpi bad"><div class="label">Customer Dues</div><div class="value" style="color:var(--bad)">${money(custDue)}</div><div class="sub">To be collected</div></div>
       <div class="kpi bad"><div class="label">Supplier Dues</div><div class="value" style="color:var(--bad)">${money(suppDue)}</div><div class="sub">To be paid out</div></div>
     </div>
+    <div class="quick-grid">
+      <div class="quick-card"><div class="icon">💸</div><h3>New Sale</h3><p>Create a bill for a customer and print or save instantly.</p></div>
+      <div class="quick-card"><div class="icon">📦</div><h3>Purchase</h3><p>Record supplier stock and automatically update product availability.</p></div>
+      <div class="quick-card"><div class="icon">📚</div><h3>Ledger</h3><p>Review customer and supplier balances with collected and due totals.</p></div>
+      <div class="quick-card"><div class="icon">📊</div><h3>Reports</h3><p>See monthly sales trends and stock health at a glance.</p></div>
+    </div>
     <div class="grid cols-2">
       <div class="card">
         <div class="row-between"><h2>Recent Bills</h2><button class="btn ghost sm" data-action="go-sales">View all →</button></div>
         ${recentSales.length===0? emptyState('No sales yet','Create your first bill from Billing / Sale.') : `
         <table><thead><tr><th>Invoice</th><th>Customer</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
-        ${recentSales.map(s=>`<tr><td class="num">${s.invoiceNo}</td><td>${esc(s.customer||'Walk-in')}</td><td class="num">${money(s.total)}</td><td>${dueStatusPill(s.total - s.paid)}</td></tr>`).join('')}
+        ${recentSales.map(s=>`<tr><td class="num">${s.invoiceNo}</td><td>${esc(s.customer||'Walk-in')}</td><td class="num">${money(s.total)}</td><td>${dueStatusPill(effectiveSaleDue(s))}</td></tr>`).join('')}
         </tbody></table>`}
       </div>
       <div class="card">
@@ -868,6 +908,38 @@ function viewDashboard(){
       </div>
     </div>
   `;
+}
+function customerSaleKey(s){
+  return (s.customerPhone||s.customer||'walk-in').trim().toLowerCase() || 'walk-in';
+}
+function supplierPurchaseKey(p){
+  return (p.supplier||'unknown').trim().toLowerCase() || 'unknown';
+}
+function effectiveSaleDue(s){
+  const key = customerSaleKey(s);
+  const sameCustomerSales = state.sales.filter(x => customerSaleKey(x) === key).sort((a,b)=> a.date.localeCompare(b.date) || a.invoiceNo.localeCompare(b.invoiceNo));
+  const payments = (state.payments||[]).filter(p => p.partyType === 'customer' && (p.partyKey||'').trim().toLowerCase() === key)
+    .reduce((sum,p)=> sum + (Number(p.amount)||0), 0);
+  let remaining = payments;
+  for (const sale of sameCustomerSales) {
+    const baseDue = Math.max(0, Number(sale.total||0) - Number(sale.paid||0));
+    if (sale.id === s.id) return Math.max(0, baseDue - remaining);
+    remaining = Math.max(0, remaining - baseDue);
+  }
+  return Math.max(0, Number(s.total||0) - Number(s.paid||0));
+}
+function effectivePurchaseDue(p){
+  const key = supplierPurchaseKey(p);
+  const sameSupplierPurchases = state.purchases.filter(x => supplierPurchaseKey(x) === key).sort((a,b)=> a.date.localeCompare(b.date) || a.invoiceNo.localeCompare(b.invoiceNo));
+  const payments = (state.payments||[]).filter(pmt => pmt.partyType === 'supplier' && (pmt.partyKey||'').trim().toLowerCase() === key)
+    .reduce((sum,pmt)=> sum + (Number(pmt.amount)||0), 0);
+  let remaining = payments;
+  for (const purchase of sameSupplierPurchases) {
+    const baseDue = Math.max(0, Number(purchase.total||0) - Number(purchase.paid||0));
+    if (purchase.id === p.id) return Math.max(0, baseDue - remaining);
+    remaining = Math.max(0, remaining - baseDue);
+  }
+  return Math.max(0, Number(p.total||0) - Number(p.paid||0));
 }
 function dueStatusPill(due){
   if(due<=0) return `<span class="pill good">Paid</span>`;
@@ -1168,7 +1240,7 @@ function viewPurchase(){
       <h2>Recent Purchases</h2>
       ${recent.length===0? emptyState('No purchases yet','Recorded purchases will show up here.') : `
       <table><thead><tr><th>Date</th><th>Invoice</th><th>Supplier</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody>
-      ${recent.map(p=>`<tr><td>${fmtDate(p.date)}</td><td class="num">${p.invoiceNo}</td><td>${esc(p.supplier)}</td><td class="num">${money(p.total)}</td><td class="num">${money(p.paid)}</td><td>${dueStatusPill(p.total-p.paid)}</td><td style="text-align:right; white-space:nowrap;">
+      ${recent.map(p=>`<tr><td>${fmtDate(p.date)}</td><td class="num">${p.invoiceNo}</td><td>${esc(p.supplier)}</td><td class="num">${money(p.total)}</td><td class="num">${money(p.paid)}</td><td>${dueStatusPill(effectivePurchaseDue(p))}</td><td style="text-align:right; white-space:nowrap;">
         ${isAdmin() ? `<button class="btn sm ghost" data-action="edit-purchase" data-id="${p.id}">Edit</button> <button class="btn sm danger" data-action="del-purchase" data-id="${p.id}">Delete</button>` : ''}
       </td></tr>`).join('')}
       </tbody></table>`}
@@ -1254,7 +1326,7 @@ function viewSales(){
       <h2>Recent Bills</h2>
       ${recent.length===0? emptyState('No bills yet','Bills you create will be listed here.') : `
       <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody>
-      ${recent.map(s=>`<tr><td>${fmtDate(s.date)}</td><td class="num">${s.invoiceNo}</td><td>${esc(s.customer||'Walk-in')}</td><td class="num">${money(s.total)}</td><td class="num">${money(s.paid)}</td><td>${dueStatusPill(s.total-s.paid)}</td><td style="text-align:right; white-space:nowrap;">
+      ${recent.map(s=>`<tr><td>${fmtDate(s.date)}</td><td class="num">${s.invoiceNo}</td><td>${esc(s.customer||'Walk-in')}</td><td class="num">${money(s.total)}</td><td class="num">${money(s.paid)}</td><td>${dueStatusPill(effectiveSaleDue(s))}</td><td style="text-align:right; white-space:nowrap;">
         <button class="btn sm ghost" data-action="print-sale" data-id="${s.id}">Print</button>
         ${isAdmin() ? ` <button class="btn sm ghost" data-action="edit-sale" data-id="${s.id}">Edit</button> <button class="btn sm danger" data-action="del-sale" data-id="${s.id}">Delete</button>` : ''}
       </td></tr>`).join('')}
