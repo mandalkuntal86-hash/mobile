@@ -1733,10 +1733,18 @@ function editSaleModalHtml(s){
   </div>`;
 }
 function editSaleItemRow(it,i){
+  const product = it.productId ? productById(it.productId) : null;
+  const cost = product ? Number(product.purchasePrice)||0 : 0;
+  const unitMargin = product && Number(it.price) ? (Number(it.price)-cost) : 0;
+  const totalMargin = unitMargin * (Number(it.qty)||0);
+  const costHint = product ? `<div class="imei-hint" style="margin-top:4px; font-size:11px;">Cost: <strong class="num">${money(cost)}</strong> / unit ${Number(it.price) ? `· Margin: <strong class="num" style="color:${totalMargin>=0?'var(--good)':'var(--bad)'}">${money(totalMargin)}</strong>` : ''}</div>` : '';
   const options = state.products.map(p=>`<option value="${p.id}" ${it.productId===p.id?'selected':''}>${esc(p.name)} (stock ${p.stock})</option>`).join('');
   return `
   <div class="itemrow" data-row="${i}">
-    <select class="es-product" data-i="${i}"><option value="">Select product…</option>${options}</select>
+    <div>
+      <select class="es-product" data-i="${i}"><option value="">Select product…</option>${options}</select>
+      ${costHint}
+    </div>
     <input type="number" class="es-qty" data-i="${i}" value="${it.qty}" min="1">
     <input type="number" class="es-price" data-i="${i}" value="${it.price}" min="0">
     <div class="num" style="padding:8px 0;">${money((Number(it.qty)||0)*(Number(it.price)||0))}</div>
