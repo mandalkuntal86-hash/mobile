@@ -1856,6 +1856,32 @@ function doDeletePurchase(purchaseId){
 
 let editPurchaseId = null;
 let editPurchaseItems = [];
+function syncEditPurchaseRowFromDom(i){
+  if(!Number.isInteger(i) || !editPurchaseItems[i]) return;
+
+  const productInput = document.querySelector(`.ep-product[data-i="${i}"]`);
+  if(productInput){
+    const typed = productInput.value.trim();
+    editPurchaseItems[i].name = typed;
+    const match = state.products.find(p => p.name.trim().toLowerCase() === typed.toLowerCase());
+    editPurchaseItems[i].productId = match ? match.id : '';
+    if(match && (!editPurchaseItems[i].price || Number(editPurchaseItems[i].price)===0)) {
+      editPurchaseItems[i].price = Number(match.purchasePrice)||0;
+    }
+  }
+
+  const qtyInput = document.querySelector(`.ep-qty[data-i="${i}"]`);
+  if(qtyInput) editPurchaseItems[i].qty = normalizeItemQty(qtyInput.value, Number(editPurchaseItems[i].qty)||1);
+
+  const priceInput = document.querySelector(`.ep-price[data-i="${i}"]`);
+  if(priceInput) editPurchaseItems[i].price = Number(priceInput.value) || 0;
+
+  const imeiInput = document.querySelector(`.ep-imei[data-i="${i}"]`);
+  if(imeiInput) editPurchaseItems[i].imeiText = imeiInput.value;
+
+  const hsnInput = document.querySelector(`.ep-hsn[data-i="${i}"]`);
+  if(hsnInput) editPurchaseItems[i].hsn = hsnInput.value;
+}
 function openEditPurchase(purchaseId){
   if(!isAdmin()) return;
   const p = state.purchases.find(x=>x.id===purchaseId);
@@ -2858,10 +2884,7 @@ function attachModalHandlers(){
     });
     inp.addEventListener('change', e=>{
       const i = Number(e.target.dataset.i);
-      const qtyInput = document.querySelector(`.ep-qty[data-i="${i}"]`);
-      const current = document.querySelector(`.ep-imei[data-i="${i}"]`);
-      if(qtyInput) editPurchaseItems[i].qty = normalizeItemQty(qtyInput.value, Number(editPurchaseItems[i].qty)||1);
-      if(current) editPurchaseItems[i].imeiText = current.value;
+      syncEditPurchaseRowFromDom(i);
       openModal(editPurchaseModalHtml(state.purchases.find(x=>x.id===editPurchaseId)));
     });
   });
