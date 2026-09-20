@@ -267,13 +267,89 @@
   ::-webkit-scrollbar-thumb{ background:#b6c9e6; border-radius:6px;}
 
   /* ---- Login screen ---- */
-  #login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; background:radial-gradient(900px 500px at 15% 0%, #163a72 0%, transparent 55%), linear-gradient(160deg, var(--side-bg-2) 0%, var(--side-bg) 100%); padding:20px; }
-  .login-card{ background:#fff; border-radius:10px; width:100%; max-width:360px; padding:30px 28px; box-shadow:0 20px 50px rgba(6,18,40,.45); }
-  .login-card h1{ font-size:20px; margin-bottom:4px; }
-  .login-card .sub{ font-size:12.5px; color:var(--ink-soft); margin-bottom:20px; }
-  .login-card .field{ margin-bottom:14px; }
-  .login-error{ background:var(--bad-bg); color:var(--bad); font-size:12.5px; padding:8px 10px; border-radius:4px; margin-bottom:14px; display:none; }
-  .login-card button{ width:100%; padding:10px; }
+  #login-screen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at top left, rgba(76,160,255,.35), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(80,255,190,.18), transparent 24%),
+      linear-gradient(135deg, #071a2c 0%, #102d4d 38%, #104e62 100%);
+    padding:24px;
+    position:relative;
+    overflow:hidden;
+  }
+  #login-screen::before,
+  #login-screen::after{
+    content:""; position:absolute; inset:auto; width:420px; height:420px; border-radius:50%;
+    background:rgba(255,255,255,.05); filter:blur(10px);
+  }
+  #login-screen::before{ top:-130px; right:-80px; }
+  #login-screen::after{ left:-100px; bottom:-140px; }
+
+  .login-shell{
+    position:relative; z-index:1; width:min(960px,100%); display:grid; grid-template-columns:1.15fr 0.85fr;
+    background:rgba(7,13,24,.28); border:1px solid rgba(255,255,255,.12); backdrop-filter:blur(12px);
+    border-radius:28px; overflow:hidden; box-shadow:0 28px 70px rgba(2,8,18,.5);
+  }
+  .login-visual{
+    padding:42px 36px; background:linear-gradient(160deg, rgba(14,42,80,.9), rgba(15,87,117,.8));
+    color:#edf7ff; display:flex; flex-direction:column; justify-content:center;
+  }
+  .login-badge{
+    display:inline-flex; align-items:center; width:max-content; border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.08); padding:8px 12px; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+    border-radius:999px; font-weight:700; margin-bottom:20px;
+  }
+  .login-visual h2{
+    font-size:2.2rem; line-height:1.1; margin:0 0 14px; font-weight:800; letter-spacing:-.04em;
+  }
+  .login-visual p{
+    margin:0; font-size:15px; line-height:1.7; color:rgba(237,247,255,.8);
+  }
+  .login-features{
+    list-style:none; padding:0; margin:28px 0 0; display:grid; gap:10px;
+  }
+  .login-features li{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); color:#f3faff;
+    font-size:14px; font-weight:600;
+  }
+
+  .login-card{
+    background:rgba(255,255,255,.96); width:100%; padding:36px 30px; box-shadow:none; border-radius:0; max-width:none;
+  }
+  .login-brand-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .brand-pill{
+    display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px;
+    background:linear-gradient(135deg, #e7f0ff, #d9fff8); color:#082a4f; font-weight:800; font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+  }
+  .login-card h1{ font-size:2rem; margin:0 0 8px; color:#102540; line-height:1.15; }
+  .login-card .sub{ font-size:14px; color:var(--ink-soft); margin-bottom:22px; line-height:1.6; }
+  .login-card .field{ margin-bottom:16px; }
+  .login-card .field label{ display:block; font-size:12px; font-weight:700; color:#37506d; margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; }
+  .login-card .field input{
+    width:100%; border:1px solid rgba(102,123,161,.25); border-radius:12px; background:#f7fafd;
+    padding:14px 14px; font-size:15px; color:#152a42; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .login-card .field input:focus{
+    outline:none; border-color:rgba(45,120,255,.7); box-shadow:0 0 0 4px rgba(45,120,255,.12); background:#fff;
+  }
+  .login-error{ background:rgba(255,87,87,.08); color:#b71818; font-size:12.5px; padding:10px 12px; border-radius:10px; margin-bottom:16px; display:none; border:1px solid rgba(183,24,24,.12); }
+  .login-card button{ width:100%; padding:14px 16px; border-radius:12px; font-weight:700; letter-spacing:.02em; }
+  .login-card button:hover{ transform:translateY(-1px); }
+
+  @media (max-width:760px){
+    #login-screen{ padding:18px 14px; }
+    .login-shell{ grid-template-columns:1fr; border-radius:22px; }
+    .login-visual{ padding:24px 20px; }
+    .login-visual h2{ font-size:1.85rem; }
+    .login-card{ padding:26px 20px; }
+    .login-card h1{ font-size:1.7rem; }
+    .login-features{ margin-top:18px; }
+  }
+  @media (max-width:420px){
+    .login-badge{ letter-spacing:.08em; font-size:10px; }
+    .login-card .field input{ padding:12px 12px; }
+    .login-card button{ padding:12px 14px; }
+  }
 
   /* ---- Mobile topbar / off-canvas sidebar (phones & narrow tablets) ---- */
   .mobile-topbar{
@@ -347,13 +423,28 @@
 <body>
 
 <div id="login-screen" style="display:none;">
-  <div class="login-card">
-    <h1>My Mobile Shop</h1>
-    <div class="sub">Sign in with the username &amp; password given by your admin</div>
-    <div class="login-error" id="login-error"></div>
-    <div class="field"><label>Username</label><input type="text" id="login-email" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
-    <div class="field"><label>Password</label><input type="password" id="login-password" autocomplete="current-password"></div>
-    <button class="btn primary" id="login-submit">Sign In</button>
+  <div class="login-shell">
+    <div class="login-visual">
+      <div class="login-badge">Smart • Secure • Fast</div>
+      <h2>Mobile Shop Ledger</h2>
+      <p>Manage billing, stock, purchases, payments, and customer insights from one modern dashboard.</p>
+      <ul class="login-features">
+        <li>📊 Sales &amp; profit overview</li>
+        <li>📦 Stock &amp; purchase tracking</li>
+        <li>💳 Customer payment control</li>
+      </ul>
+    </div>
+    <div class="login-card">
+      <div class="login-brand-row">
+        <span class="brand-pill">Eldorado</span>
+      </div>
+      <h1>Welcome back</h1>
+      <div class="sub">Sign in to continue managing your shop</div>
+      <div class="login-error" id="login-error"></div>
+      <div class="field"><label>Username</label><input type="text" id="login-email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Enter username"></div>
+      <div class="field"><label>Password</label><input type="password" id="login-password" autocomplete="current-password" placeholder="Enter password"></div>
+      <button class="btn primary" id="login-submit">Sign In</button>
+    </div>
   </div>
 </div>
 
@@ -3098,9 +3189,37 @@ function attachModalHandlers(){
   const passInp = document.getElementById('login-password');
   const submitBtn = document.getElementById('login-submit');
   const signoutBtn = document.getElementById('signout-btn');
+  const AUTO_LOGOUT_MS = 20 * 60 * 1000;
+  let logoutTimer = null;
 
   function showError(msg){ errBox.textContent = msg; errBox.style.display = 'block'; }
   function hideError(){ errBox.style.display = 'none'; }
+
+  function clearLogoutTimer(){
+    if(logoutTimer){ clearTimeout(logoutTimer); logoutTimer = null; }
+  }
+
+  function resetLogoutTimer(){
+    if(!currentUser) return;
+    clearLogoutTimer();
+    logoutTimer = setTimeout(()=>{
+      if(currentUser){
+        performLogout('Your session expired after 20 minutes of inactivity.');
+      }
+    }, AUTO_LOGOUT_MS);
+  }
+
+  function performLogout(message=''){ 
+    currentUser = null;
+    localStorage.removeItem(SESSION_KEY);
+    clearLogoutTimer();
+    appRoot.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    userInp.value = ''; passInp.value = ''; 
+    if(message){ showError(message); }
+    else { hideError(); }
+    if(typeof closeMobileSidebar==='function') closeMobileSidebar();
+  }
 
   function signInAs(rec){
     currentUser = { username: rec.username, role: rec.role };
@@ -3108,6 +3227,7 @@ function attachModalHandlers(){
     loginScreen.style.display = 'none';
     appRoot.style.display = 'flex';
     if(typeof closeMobileSidebar==='function') closeMobileSidebar();
+    resetLogoutTimer();
     render();
   }
 
@@ -3120,17 +3240,16 @@ function attachModalHandlers(){
     if(!rec){ showError('Incorrect username or password.'); return; }
     signInAs(rec);
   }
+
+  const activityEvents = ['click', 'keydown', 'mousemove', 'touchstart', 'scroll', 'pointerdown'];
+  activityEvents.forEach(evt => document.addEventListener(evt, resetLogoutTimer, { passive: true }));
+
   submitBtn.addEventListener('click', doLogin);
   passInp.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
   userInp.addEventListener('keydown', e=>{ if(e.key==='Enter') passInp.focus(); });
 
   if(signoutBtn) signoutBtn.onclick = ()=>{
-    currentUser = null;
-    localStorage.removeItem(SESSION_KEY);
-    appRoot.style.display = 'none';
-    loginScreen.style.display = 'flex';
-    userInp.value = ''; passInp.value = ''; hideError();
-    if(typeof closeMobileSidebar==='function') closeMobileSidebar();
+    performLogout();
   };
 
   (async function boot(){
