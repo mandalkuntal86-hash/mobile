@@ -1850,19 +1850,59 @@ function doDeletePurchase(purchaseId){
 }
 
 let editPurchaseId = null;
+let editPurchaseItems = [];
 function openEditPurchase(purchaseId){
   if(!isAdmin()) return;
   const p = state.purchases.find(x=>x.id===purchaseId);
   if(!p) return;
   editPurchaseId = purchaseId;
+  editPurchaseItems = p.items.map(it=>({
+    productId: it.productId || '',
+    name: it.name || '',
+    qty: it.qty,
+    price: it.price,
+    imeiText: '',
+    hsn: it.productId ? (productById(it.productId)?.hsn || '') : ''
+  }));
   openModal(editPurchaseModalHtml(p));
 }
+function editPurchaseItemRow(it,i){
+  const qty = Number(it.qty)||0;
+  const imeiCount = parseImeiLines(it.imeiText).length;
+  const countOk = qty>0 && imeiCount===qty;
+  const typed = (it.name||'').trim();
+  let matchHint = '';
+  if(typed){
+    matchHint = it.productId
+      ? `<div class="imei-hint" style="margin:2px 0 8px 0;color:var(--good);">✓ Existing product — this purchase will update that product.</div>`
+      : `<div class="imei-hint" style="margin:2px 0 8px 0;color:#a56a00;">＋ New product "${esc(typed)}" will be created when you save.</div>`;
+  }
+  const showHsnField = typed && !it.productId;
+  const needsImei = tracksImei(it.productId || null);
+  return `
+  <div class="itemrow" data-row="${i}">
+    <input type="text" class="ep-product" data-i="${i}" list="ep-product-list-${i}" value="${esc(it.name||'')}" placeholder="Search product, or type a new name…" autocomplete="off">
+    <input type="number" class="ep-qty" data-i="${i}" value="${it.qty}" min="1">
+    <input type="number" class="ep-price" data-i="${i}" value="${it.price}" min="0">
+    <div class="num" style="padding:8px 0;">${money((Number(it.qty)||0)*(Number(it.price)||0))}</div>
+    <button class="rm" data-action="ep-rm-row" data-i="${i}" title="Remove">&times;</button>
+  </div>
+  <datalist id="ep-product-list-${i}">${state.products.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist>
+  ${matchHint}
+  ${showHsnField ? `<div class="field" style="margin:2px 0 8px 0;"><label>HSN/SAC Code for new product (optional)</label><input type="text" class="ep-hsn" data-i="${i}" value="${esc(it.hsn||'')}" placeholder="e.g. 85171200"></div>` : ''}
+  ${needsImei ? `
+  <div class="imei-box" style="${countOk?'border-color:#bcd8c4;background:var(--good-bg);':''}">
+    <label>IMEI / Serial numbers for this line <span style="color:var(--bad);">*</span> — one per line, exactly ${qty} required</label>
+    <textarea class="pu-imei ep-imei" data-i="${i}" rows="3" placeholder="e.g.\n356789012345671\n356789012345672">${esc(it.imeiText)}</textarea>
+    <div class="imei-hint" style="${qty>0 && !countOk?'color:var(--bad);font-weight:600;':''}">${qty>0 ? `${imeiCount} of ${qty} entered${countOk?' — matched':''}` : 'Set a quantity first'} · This product is set to track IMEI/serial numbers.</div>
+  </div>` : (it.productId ? `<div class="imei-hint" style="margin:-4px 0 12px 0;">This product isn't set to track IMEI/serial numbers — nothing extra needed here.</div>` : '')}`;
+}
 function editPurchaseModalHtml(p){
+  const subtotal = editPurchaseItems.reduce((a,it)=> a + (Number(it.qty)||0)*(Number(it.price)||0), 0);
   return `
   <div class="modal-bg" data-close="modal">
     <div class="modal" data-stop>
       <div class="modal-head"><h2>Edit Purchase — ${esc(p.invoiceNo)}</h2><button class="modal-close" data-close="modal">&times;</button></div>
-      <div class="imei-hint" style="margin:-4px 0 12px 0;">Supplier, date, invoice # and amount paid can be corrected here. To change the items or quantities on this purchase, delete it and re-enter it instead — this keeps stock and IMEI/serial records accurate.</div>
       <div class="grid cols-2">
         <div class="field"><label>Supplier Name</label><input type="text" id="ep-supplier" value="${esc(p.supplier)}"></div>
         <div class="field"><label>Purchase Date</label><input type="date" id="ep-date" value="${p.date}"></div>
@@ -1870,9 +1910,13 @@ function editPurchaseModalHtml(p){
         <div class="field"><label>Amount Paid (₹)</label><input type="number" id="ep-paid" value="${p.paid}"></div>
       </div>
       <h3 style="margin-top:8px;">Items</h3>
-      <table><thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Price ea.</th><th class="num">Line total</th></tr></thead><tbody>
-      ${p.items.map(it=>`<tr><td>${esc(it.name)}</td><td class="num">${it.qty}</td><td class="num">${money(it.price)}</td><td class="num">${money(it.qty*it.price)}</td></tr>`).join('')}
-      </tbody></table>
+      <div class="itemhead"><div>Product</div><div>Qty</div><div>Price ea.</div><div>Line total</div><div></div></div>
+      <div id="edit-purchase-item-rows">${editPurchaseItems.map((it,i)=>editPurchaseItemRow(it,i)).join('')}</div>
+      <button class="btn sm ghost" data-action="ep-add-row" style="margin-top:4px;">+ Add item</button>
+      <div style="margin-top:16px; text-align:right;">
+        <div style="font-size:12px;color:var(--ink-soft); margin-bottom:4px;">Subtotal</div>
+        <div class="num" style="font-size:20px;font-weight:700;">${money(subtotal)}</div>
+      </div>
       <div style="text-align:right; margin-top:8px;">
         <button class="btn ghost" data-close="modal">Cancel</button>
         <button class="btn primary" data-action="save-edit-purchase" data-id="${p.id}">Save Changes</button>
@@ -1891,12 +1935,33 @@ function doSaveEditedPurchase(){
   let paid = Number(document.getElementById('ep-paid').value);
   if(isNaN(paid)) paid = p.paid;
 
+  const items = [];
+  for(const it of editPurchaseItems){
+    const qty = Number(it.qty)||0;
+    if(qty<=0) continue;
+    let productId = it.productId;
+    if(!productId){
+      const name = (it.name || '').trim();
+      if(!name) continue;
+      const newProd = { id: uid('p'), name, category:'General', trackImei:true, brand:'', imei:'', hsn: (it.hsn||'').trim(), purchasePrice: Number(it.price)||0, salePrice: Math.round((Number(it.price)||0)*1.1), stock:0, minStock:2 };
+      state.products.push(newProd);
+      productId = newProd.id;
+    }
+    const prod = productById(productId);
+    if(!prod) continue;
+    prod.name = prod.name || (it.name||'');
+    prod.purchasePrice = Number(it.price)||0;
+    items.push({ productId, name: prod.name, qty, price: Number(it.price)||0 });
+  }
+  if(items.length===0){ alert('Add at least one valid item with quantity.'); return; }
+
   p.supplier = supplier;
   p.date = date;
   p.invoiceNo = invoiceNo;
+  p.items = items;
+  p.total = items.reduce((a,it)=>a + it.qty*it.price, 0);
   p.paid = paid;
   p.due = p.total - paid;
-  // Keep any IMEI/serial units linked to this purchase in sync with the corrected date.
   (state.imeiUnits||[]).forEach(u=>{ if(u.purchaseId===p.id) u.purchaseDate = date; });
 
   saveState();
@@ -2735,6 +2800,34 @@ function attachModalHandlers(){
   });
 
   // Edit-purchase modal (admin-only)
+  const epAddRow = root.querySelector('[data-action="ep-add-row"]');
+  if(epAddRow) epAddRow.addEventListener('click', ()=>{
+    editPurchaseItems.push({ productId:'', name:'', qty:1, price:0, imeiText:'', hsn:'' });
+    openModal(editPurchaseModalHtml(state.purchases.find(x=>x.id===editPurchaseId)));
+  });
+  root.querySelectorAll('[data-action="ep-rm-row"]').forEach(b=>b.addEventListener('click', ()=>{
+    editPurchaseItems.splice(Number(b.dataset.i),1);
+    if(editPurchaseItems.length===0) editPurchaseItems.push({ productId:'', name:'', qty:1, price:0, imeiText:'', hsn:'' });
+    openModal(editPurchaseModalHtml(state.purchases.find(x=>x.id===editPurchaseId)));
+  }));
+  root.querySelectorAll('.ep-product').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i);
+      const val = e.target.value;
+      editPurchaseItems[i].name = val;
+      const match = state.products.find(p=>p.name.trim().toLowerCase()===val.trim().toLowerCase());
+      if(match){
+        editPurchaseItems[i].productId = match.id;
+        editPurchaseItems[i].price = match.purchasePrice;
+      }else{
+        editPurchaseItems[i].productId = '';
+      }
+    });
+    inp.addEventListener('change', ()=> openModal(editPurchaseModalHtml(state.purchases.find(x=>x.id===editPurchaseId))));
+  });
+  root.querySelectorAll('.ep-qty').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].qty = e.target.value; }));
+  root.querySelectorAll('.ep-price').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].price = e.target.value; }));
+  root.querySelectorAll('.ep-hsn').forEach(inp=>inp.addEventListener('input', e=>{ editPurchaseItems[Number(e.target.dataset.i)].hsn = e.target.value; }));
   const saveEditPurchaseBtn = root.querySelector('[data-action="save-edit-purchase"]');
   if(saveEditPurchaseBtn) saveEditPurchaseBtn.addEventListener('click', doSaveEditedPurchase);
 
