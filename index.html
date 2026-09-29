@@ -643,7 +643,7 @@ function reconcileProductStocks(){
   const stockByProduct = {};
   const trackedPurchasedByProduct = {};
   const trackedSoldByProduct = {};
-  (state.products||[]).forEach(p=>{ stockByProduct[p.id] = 0; trackedPurchasedByProduct[p.id] = 0; trackedSoldByProduct[p.id] = 0; });
+  (state.products||[]).forEach(p=>{ stockByProduct[p.id] = Number(p.openingStock)||0; trackedPurchasedByProduct[p.id] = Number(p.openingStock)||0; trackedSoldByProduct[p.id] = 0; });
 
   (state.purchases||[]).forEach(purchase=>{
     purchase.items.forEach(it=>{
@@ -3019,10 +3019,11 @@ function attachModalHandlers(){
     };
     if(id){
       const p = productById(id);
+      p.openingStock = (Number(p.openingStock)||0) + data.stock - (Number(p.stock)||0);
       Object.assign(p, data);
       syncProductImeiField(p);
     }else{
-      const np = { id: uid('p'), ...data };
+      const np = { id: uid('p'), ...data, openingStock: data.stock };
       state.products.push(np);
       syncProductImeiField(np);
     }
