@@ -671,7 +671,7 @@ body.home .navlist li:not(:has([data-tab="company"])):not(:has([data-tab="users"
 
 <body>
 
-<div id="login-screen" style="display:none;">
+<div id="login-screen">
   <div class="login-shell">
     <div class="login-visual">
       <div class="login-badge">Smart • Secure • Fast</div>
@@ -3850,16 +3850,24 @@ function attachModalHandlers(){
   };
 
   (async function boot(){
-    await loadState();
-    seedAdminIfNeeded();
-    const savedUsername = localStorage.getItem(SESSION_KEY);
-    const rec = savedUsername ? state.users.find(u=>u.username===savedUsername) : null;
-    if(rec){
-      signInAs(rec);
-    }else{
-      localStorage.removeItem(SESSION_KEY);
-      appRoot.style.display = 'none';
-      loginScreen.style.display = 'flex';
+    const loginStatus = loginScreen.querySelector('.sub');
+    submitBtn.disabled = true;
+    if(loginStatus) loginStatus.textContent = 'Connecting to your shop data...';
+    try{
+      await loadState();
+      seedAdminIfNeeded();
+      const savedUsername = localStorage.getItem(SESSION_KEY);
+      const rec = savedUsername ? state.users.find(u=>u.username===savedUsername) : null;
+      if(rec){
+        signInAs(rec);
+      }else{
+        localStorage.removeItem(SESSION_KEY);
+        appRoot.style.display = 'none';
+        loginScreen.style.display = 'flex';
+      }
+    }finally{
+      submitBtn.disabled = false;
+      if(loginStatus) loginStatus.textContent = 'Sign in to continue managing your shop';
     }
   })();
 })();
