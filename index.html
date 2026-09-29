@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Billzen — Mobile Shop Billing</title>
+<meta name="theme-color" content="#174f8b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Billzen">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/billzen-192.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -602,22 +609,40 @@ tr:hover td{ background:#fff8dc; }
   .btn{ padding:8px 14px; }
 }
 @media (max-width:760px){
-  .eb-header .topline{ height:auto; flex-wrap:wrap; gap:4px 8px; padding:6px 8px; }
-  .eb-header .brand{ font-size:17px; min-width:0; max-width:52vw; }
-  .eb-header .find{ order:3; width:100%; margin:0; font-size:13px; }
-  .top-actions{ gap:6px; font-size:11px; }
+  .eb-header .topline{ height:auto; flex-wrap:wrap; gap:6px 8px; padding:6px 8px; }
+  .eb-header .brand{ flex:1 1 auto; font-size:17px; min-width:0; max-width:none; }
+  .eb-header .find{ order:3; flex:1 0 100%; width:100%; min-width:0; margin:0; font-size:13px; }
+  .top-actions{ flex:0 1 auto; min-width:0; max-width:100%; gap:6px; font-size:11px; }
+  #sb-status{ display:none; }
+  #sb-user{ min-width:0; max-width:30vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #signout-btn{ flex:none; }
   #dt, #sb-user .pill{ display:none; }
   .commands{ justify-content:flex-start; gap:10px; padding:0 7px; font-size:12px; height:34px; }
   .wrap{ flex-direction:column; }
   #sidebar{ order:-1; width:auto; min-height:38px; flex-direction:row; border-left:0; border-bottom:1px solid #c8ddeb; padding:4px 6px; }
   .navlist{ flex-direction:row; gap:4px; }
   .navbtn{ white-space:nowrap; width:auto; }
-  #companies{ width:100%; max-width:none; min-width:0; max-height:146px; border-right:0; border-bottom:1px solid #d7dfe6; }
+  #companies, body.home #companies{ width:100%; max-width:none; min-width:0; max-height:146px; border-right:0; border-bottom:1px solid #d7dfe6; }
   .period{ height:56px; padding:9px 12px; }
   .period .current-date{ right:12px; top:9px; }
   .company-head{ padding:5px 12px; }
   .company-row{ padding:8px 12px; }
   #main{ min-height:0; }
+  .pagehead > div{ min-width:0; }
+  .pagehead > div:has(> .btn){ display:flex; flex-wrap:wrap; gap:6px; }
+  .report-range-box{ width:100%; }
+  .report-range-box input[type="date"]{ flex:1 1 130px; width:auto; min-width:0; }
+}
+@media (max-width:420px){
+  .hero-metrics{ grid-template-columns:1fr; }
+}
+@media (min-width:761px) and (max-width:880px){
+  .eb-header .topline{ height:auto; flex-wrap:wrap; gap:6px 8px; padding:6px 10px; }
+  .eb-header .brand{ flex:1 1 auto; min-width:0; max-width:none; }
+  .eb-header .find{ order:3; flex:1 0 100%; width:100%; margin:0; }
+  .top-actions{ flex:0 1 auto; min-width:0; max-width:100%; gap:8px; }
+  #sb-status, #dt{ display:none; }
+  #sb-user{ min-width:0; max-width:25vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 }
 @media print{
   html,body{ height:auto !important; overflow:visible !important; }
@@ -625,6 +650,7 @@ tr:hover td{ background:#fff8dc; }
 
 /* ---- Gateway (home) screen: centered menu box like the module ---- */
 body.home #companies{ width:45%; max-width:48%; }
+@media (max-width:760px){ body.home #companies{ width:100%; max-width:none; } }
 body.home #main{ display:flex; align-items:center; justify-content:center; padding:18px; }
 .gw{ width:min(340px,100%); margin:auto; border:1px solid #b6d4e9; background:var(--panel); box-shadow:0 1px 3px #00000012; }
 .gw-title{ background:#2869ad; color:#fff; text-align:center; padding:5px; font-size:13px; font-weight:600; }
@@ -3827,6 +3853,12 @@ function attachModalHandlers(){
     }
   })();
 })();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(error=>console.error('Service worker registration failed', error));
+  });
+}
 </script>
 </body>
 </html>
