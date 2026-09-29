@@ -417,6 +417,228 @@
   @media (max-width:420px){
     .kpis{ grid-template-columns:1fr; }
   }
+
+/* =====================================================================
+   EASY BILL THEME  (presentation only — no data / logic touched)
+   Re-skins the whole app to match the "Easy Bill" module:
+   blue header + command bar, light-blue title bar, flat panels,
+   right-hand menu, yellow selection colour, Segoe UI type.
+   ===================================================================== */
+:root{
+  --bg:#ffffff; --surface:#ffffff; --ink:#111820; --ink-soft:#6d8193; --line:#b7d0e3;
+  --accent:#2567ad; --accent-2:#174f8b; --accent-ink:#ffffff; --accent-soft:#e3f2fc;
+  --blue:#174f8b; --blue2:#2567ad; --panel:#e3f2fc; --select:#ffd037;
+  --info:#1b6a9c; --info-bg:#e3f2fc;
+  --radius:0; --radius-sm:0; --shadow:none; --shadow-lift:0 1px 3px rgba(0,0,0,.12);
+}
+html,body{ background:#fff; }
+body{ font-family:"Segoe UI",Tahoma,"Helvetica Neue",Arial,sans-serif; font-size:15px; line-height:1.4; background:#fff; color:var(--ink); }
+h1,h2,h3{ font-family:inherit; font-weight:600; letter-spacing:0; }
+.num{ font-family:inherit; font-variant-numeric:tabular-nums; }
+
+/* ---- Shell: header / command bar / title bar / body ---- */
+#app{ flex-direction:column; height:100vh; height:100dvh; min-height:0; }
+.eb-header{ background:var(--blue); color:#fff; flex:none; }
+.eb-header .topline{ height:42px; display:flex; align-items:center; gap:18px; padding:0 10px; }
+.eb-header .brand{ font-size:21px; line-height:1.05; min-width:155px; max-width:30vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; font-weight:700; }
+.eb-header .find{ height:28px; width:min(420px,34vw); margin:auto; border:1px solid #a9c8e5; background:#f7fbff; color:#294b6b; padding:3px 9px; font-size:13px; min-height:0; border-radius:0; }
+.eb-header .find:focus{ outline:2px solid #ffd037; background:#fff; }
+.top-actions{ display:flex; align-items:center; gap:14px; margin-left:auto; font-size:12px; white-space:nowrap; }
+#sb-status{ color:#ffd24d; font-weight:700; }
+#sb-user{ color:#dbe9f7; font-size:12px; }
+#sb-user strong{ color:#fff !important; }
+#sb-user div{ display:inline !important; margin:0 0 0 6px !important; }
+#sb-user .pill{ padding:0 7px; font-size:10px; border-radius:0; }
+.top-actions button{ border:0; background:transparent; color:#fff; padding:4px 7px; font:inherit; white-space:nowrap; }
+.top-actions button:hover{ background:#ddecf8; color:#123e70; }
+.commands{ height:32px; display:flex; align-items:center; justify-content:center; gap:clamp(8px,3vw,40px); background:var(--blue); border-top:1px solid #4778ac; font-size:13px; overflow-x:auto; }
+.commands button{ border:0; background:transparent; color:#fff; padding:4px 7px; font:inherit; white-space:nowrap; }
+.commands button:hover{ background:#ddecf8; color:#123e70; }
+.pagebar{ height:24px; padding:3px 8px; background:#8fc1e7; color:#071c30; font-weight:700; font-size:13px; border-bottom:1px solid #6aa8da; display:flex; justify-content:space-between; align-items:center; flex:none; }
+.pagebar button{ border:0; background:transparent; color:#122b43; padding:0 8px; line-height:18px; font-weight:700; }
+.pagebar button:hover{ background:var(--select); }
+.wrap{ flex:1; display:flex; min-height:0; overflow:hidden; }
+
+/* company / period panel (dashboard only) */
+#companies{ display:none; width:32%; min-width:260px; max-width:360px; flex:none; border-right:1px solid #d7dfe6; overflow:auto; color:#16314b; font-size:13px; background:#fff; }
+body.home #companies{ display:block; }
+.period{ height:76px; padding:19px 20px 8px; position:relative; border-bottom:1px solid #79b8e5; }
+.period small{ display:block; color:#507998; font-size:11px; margin-bottom:5px; }
+.period strong{ font-size:13px; }
+.period .current-date{ position:absolute; right:20px; top:19px; text-align:right; }
+.company-head{ display:flex; justify-content:space-between; padding:6px 20px; color:#4c7596; font-size:11px; border-bottom:1px solid #a8d2ef; }
+.company-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:13px 20px; cursor:pointer; }
+.company-row:hover{ background:#f0f7fc; }
+.company-row button{ border:0; background:transparent; color:#16314b; padding:0; text-align:left; font-size:14px; }
+.company-row button:hover{ text-decoration:underline; background:transparent; color:var(--blue); }
+.company-row time{ color:#405a72; font-size:12px; white-space:nowrap; }
+
+/* main work area */
+#main{ flex:1; min-width:0; max-width:none; padding:14px; overflow:auto; background:#fff; }
+
+/* right-hand menu (was the left sidebar) */
+#sidebar{
+  position:static; transform:none; height:auto; width:172px; max-width:none; flex:none; z-index:auto;
+  background:#e4f4fc; border-left:1px solid #c8ddeb; color:#14395d; padding:7px; display:flex; flex-direction:column;
+  overflow:auto; box-shadow:none; transition:none;
+}
+.navlist{ list-style:none; margin:0; padding:0; flex:none; display:flex; flex-direction:column; gap:5px; }
+.navlist li{ margin:0; }
+.navbtn{ display:block; width:100%; text-align:left; padding:6px; border:0; border-left:0; border-radius:0; background:transparent; color:#14395d; font-size:13px; }
+.navbtn .ic{ display:none; }
+.navbtn:hover{ background:#cce7f8; color:#082944; }
+.navbtn.active{ background:var(--select); color:#10253a; font-weight:600; border-left-color:transparent; box-shadow:none; }
+
+/* ---- Headings / panels ---- */
+.pagehead{ background:var(--panel); padding:6px 9px; border-bottom:1px solid #77abd2; margin-bottom:12px; align-items:center; }
+.pagehead h1{ font-size:18px; color:#153c62; margin:0; }
+.pagehead .desc{ color:#4c7596; font-size:12px; margin-top:0; }
+.card{ background:#fff; border:1px solid var(--line); border-radius:0; box-shadow:none; padding:14px; margin-bottom:14px; }
+.card h2{ background:var(--panel); border-bottom:1px solid #77abd2; padding:5px 9px; margin:-14px -14px 12px; font-size:15px; color:#153c62; }
+.card .row-between h2{ margin:0; background:none; border:0; padding:0; }
+.card > .row-between:first-child:has(> h2){ background:var(--panel); border-bottom:1px solid #77abd2; margin:-14px -14px 12px; padding:4px 9px; }
+.card > .row-between:first-child:has(> h2) h2{ font-size:15px; color:#153c62; }
+body.home .grid.cols-2{ grid-template-columns:1fr; }
+@media (min-width:1600px){ body.home .grid.cols-2{ grid-template-columns:1fr 1fr; } }
+.card h3{ color:#276da5; font-size:14px; border-bottom:1px solid #d8e7f1; padding-bottom:4px; }
+.report-range-box{ background:var(--panel); border:1px solid var(--line); border-radius:0; box-shadow:none; }
+
+/* ---- Forms ---- */
+label{ color:#4a6276; font-weight:600; }
+input[type=text],input[type=number],input[type=tel],input[type=date],input[type=email],input[type=password],select,textarea{
+  border:1px solid #9fbad0; border-radius:0; background:#fff; color:var(--ink); font-size:14px; padding:6px 8px; min-height:32px;
+}
+input:focus,select:focus,textarea:focus{ outline:2px solid #81bae3; border-color:#81bae3; background:#f3faff; }
+.imei-box{ background:var(--panel); border:1px dashed #9fbad0; border-radius:0; }
+
+/* ---- Buttons ---- */
+button{ font-family:inherit; }
+.btn{ border-radius:0; border:1px solid var(--line); background:#fff; color:var(--ink); font-weight:500; box-shadow:none; }
+.btn:hover{ background:var(--select); color:#000; }
+.btn.primary{ background:var(--blue2); border-color:var(--blue); color:#fff; box-shadow:none; }
+.btn.primary:hover{ background:var(--select); color:#000; border-color:#d9a900; }
+.btn.ghost{ background:transparent; border-color:transparent; }
+.btn.ghost:hover{ background:#cce7f8; color:#082944; }
+.btn.danger{ color:var(--bad); border-color:#efc3cb; background:#fff; }
+.btn.danger:hover{ background:var(--bad-bg); color:var(--bad); }
+
+/* ---- Tables (full grid like the module) ---- */
+table{ font-size:13.5px; }
+th{ background:#e7f3fa; color:#274d6d; text-transform:none; letter-spacing:0; font-size:13px; font-weight:600; padding:5px 7px; border:1px solid #c5d8e5; }
+td{ padding:5px 7px; border:1px solid #c5d8e5; }
+tr:last-child td{ border-bottom:1px solid #c5d8e5; }
+tr:hover td{ background:#fff8dc; }
+.card{ overflow-x:auto; }
+.grid > *{ min-width:0; }
+
+/* ---- Chips, pills, tabs ---- */
+.pill{ border-radius:2px; }
+.avatar{ border-radius:0; background:var(--panel); color:var(--blue); }
+.mono-chip{ font-family:inherit; border-radius:0; background:#e7f3fa; }
+.filter-tabs button{ border-radius:0; font-weight:500; border:1px solid var(--line); color:#274d6d; }
+.filter-tabs button:hover{ background:#cce7f8; }
+.filter-tabs button.active{ background:var(--select); color:#10253a; border-color:#d9a900; }
+.tabs2{ border-bottom:1px solid #77abd2; }
+.tab2{ color:#4c7596; }
+.tab2.active{ color:#153c62; background:var(--select); border-bottom-color:#d9a900; }
+.statement-row{ border-bottom:1px solid #d8e7f1; }
+
+/* ---- Dashboard blocks ---- */
+.hero-panel{ background:var(--blue); border-radius:0; box-shadow:none; padding:14px 16px; }
+.hero-panel h1{ font-size:24px; }
+.mini-stat{ border-radius:0; background:rgba(255,255,255,.1); }
+.mini-stat strong{ font-family:inherit; }
+.kpi{ border-radius:0; box-shadow:none; border:1px solid var(--line); border-left:4px solid var(--accent); background:#fff; }
+.kpi:hover{ box-shadow:none; transform:none; background:#f6fbff; }
+.kpi .value{ font-family:inherit; font-size:21px; }
+.quick-card{ border-radius:0; box-shadow:none; background:var(--panel); border:1px solid var(--line); }
+.quick-card .icon{ border-radius:0; background:#fff; }
+.empty{ color:var(--ink-soft); }
+
+/* ---- Modals ---- */
+.modal-bg{ background:rgba(10,30,55,.5); }
+.modal{ border-radius:0; box-shadow:0 8px 28px rgba(0,0,0,.3); border:1px solid var(--line); padding:0 18px 18px; }
+.modal-head{ background:var(--blue2); color:#fff; margin:0 -18px 14px; padding:7px 12px; }
+.modal-head h2, .modal-head h3{ color:#fff; margin:0; font-size:15px; }
+.modal-close{ color:#fff; }
+.modal-close:hover{ background:var(--select); color:#000; }
+
+/* ---- Login ---- */
+#login-screen{ background:#e4f4fc; }
+#login-screen::before, #login-screen::after{ display:none; }
+.login-shell{ border-radius:0; background:#fff; border:1px solid #b6d4e9; backdrop-filter:none; box-shadow:0 2px 12px rgba(0,0,0,.12); }
+.login-visual{ background:var(--blue); border-radius:0; }
+.login-visual h2{ font-weight:600; letter-spacing:0; font-size:1.9rem; }
+.login-badge{ border-radius:0; }
+.login-features li{ border-radius:0; background:rgba(255,255,255,.1); }
+.login-card{ background:#fff; }
+.brand-pill{ border-radius:0; background:var(--panel); color:var(--blue); }
+.login-card h1{ font-size:1.6rem; color:#153c62; }
+.login-card .field label{ color:#4a6276; letter-spacing:.03em; }
+.login-card .field input{ border-radius:0; background:#fff; border:1px solid #9fbad0; padding:10px 12px; }
+.login-card .field input:focus{ box-shadow:none; border-color:#81bae3; background:#f3faff; outline:2px solid #81bae3; }
+.login-error{ border-radius:0; }
+.login-card button{ border-radius:0; }
+.login-card button:hover{ transform:none; }
+
+/* ---- Printable documents keep their original formal look (bill, GST invoice, statements) ---- */
+#invoice-paper th, #gst-invoice th{ background:transparent; color:#5C7089; text-transform:uppercase; letter-spacing:.04em; font-size:11px; font-weight:700; }
+#invoice-paper th{ border-width:0 0 1px 0; }
+#invoice-paper td{ border-width:0 0 1px 0; }
+#gst-invoice .items-tbl th{ text-transform:none; font-size:10.5px; background:#F4F2EA; }
+#invoice-paper tr:hover td, #gst-invoice tr:hover td{ background:transparent; }
+#invoice-paper, #gst-invoice{ font-size:14px; line-height:1.5; }
+#gst-invoice{ font-size:11.5px; }
+#invoice-paper .num, #gst-invoice .num{ font-family:'IBM Plex Mono',monospace; }
+
+::-webkit-scrollbar-thumb{ background:#a9c8e5; border-radius:0; }
+
+/* ---- Phones / narrow screens: menu becomes a strip under the title bar ---- */
+@media (max-width:880px){
+  #main{ padding:10px; }
+  .card{ padding:12px; }
+  .card h2{ margin:-12px -12px 10px; }
+  .navbtn{ padding:6px 10px; font-size:13px; }
+  .btn{ padding:8px 14px; }
+}
+@media (max-width:760px){
+  .eb-header .topline{ height:auto; flex-wrap:wrap; gap:4px 8px; padding:6px 8px; }
+  .eb-header .brand{ font-size:17px; min-width:0; max-width:52vw; }
+  .eb-header .find{ order:3; width:100%; margin:0; font-size:13px; }
+  .top-actions{ gap:6px; font-size:11px; }
+  #dt, #sb-user .pill{ display:none; }
+  .commands{ justify-content:flex-start; gap:10px; padding:0 7px; font-size:12px; height:34px; }
+  .wrap{ flex-direction:column; }
+  #sidebar{ order:-1; width:auto; min-height:38px; flex-direction:row; border-left:0; border-bottom:1px solid #c8ddeb; padding:4px 6px; }
+  .navlist{ flex-direction:row; gap:4px; }
+  .navbtn{ white-space:nowrap; width:auto; }
+  #companies{ width:100%; max-width:none; min-width:0; max-height:146px; border-right:0; border-bottom:1px solid #d7dfe6; }
+  .period{ height:56px; padding:9px 12px; }
+  .period .current-date{ right:12px; top:9px; }
+  .company-head{ padding:5px 12px; }
+  .company-row{ padding:8px 12px; }
+  #main{ min-height:0; }
+}
+@media print{
+  html,body{ height:auto !important; overflow:visible !important; }
+}
+
+/* ---- Gateway (home) screen: centered menu box like the module ---- */
+body.home #companies{ width:45%; max-width:48%; }
+body.home #main{ display:flex; align-items:center; justify-content:center; padding:18px; }
+.gw{ width:min(340px,100%); margin:auto; border:1px solid #b6d4e9; background:var(--panel); box-shadow:0 1px 3px #00000012; }
+.gw-title{ background:#2869ad; color:#fff; text-align:center; padding:5px; font-size:13px; font-weight:600; }
+.gw-sec{ color:#5488ad; padding:10px 15px 3px; text-transform:uppercase; font-size:12px; }
+.gw-item{ padding:3px 15px; min-height:24px; cursor:pointer; font-size:14px; color:#16395d; }
+.gw-item.on{ background:var(--select); color:#10253a; }
+.gw-pad{ height:10px; }
+/* on the gateway the right menu only keeps the few shortcuts, like the module */
+body.home .navlist li:not(:has([data-tab="company"])):not(:has([data-tab="users"])){ display:none; }
+
+/* keyboard hints */
+.gw-item .hk{ color:#1767a8; font-weight:700; }
+.gw-item.on .hk{ color:#10253a; text-decoration:underline; }
+.commands kbd{ font:inherit; text-decoration:underline; }
 </style>
 </head>
 
@@ -449,25 +671,34 @@
 </div>
 
 <div id="app" style="display:none;">
-  <div class="mobile-topbar" id="mobile-topbar">
-    <button class="hamburger" id="hamburger-btn" aria-label="Open menu"><span></span><span></span><span></span></button>
-    <div class="mt-title" id="mt-title">Shop Ledger</div>
-  </div>
-  <div class="sidebar-overlay" id="sidebar-overlay"></div>
-  <nav id="sidebar">
-    <div class="brand">
-      <div class="mark">&#128241;</div>
-      <div>
-        <div class="name" id="sb-shopname">Shop Ledger</div>
-        <div class="sub">Mobile shop billing</div>
+  <header class="eb-header">
+    <div class="topline">
+      <b class="brand" id="sb-shopname">Shop Ledger</b>
+      <input id="find" class="find" type="text" placeholder="Find product, IMEI, customer or supplier (Alt+F)" aria-label="Search" autocomplete="off">
+      <div class="top-actions">
+        <span id="sb-status">Connecting to Firebase…</span>
+        <span id="sb-user"></span>
+        <span id="dt"></span>
+        <button id="signout-btn" type="button">Sign out</button>
       </div>
     </div>
-    <ul class="navlist" id="navlist"></ul>
-    <div class="footer" id="sb-user" style="border-top:none; padding-bottom:0; font-size:12px;"></div>
-    <div class="footer" id="sb-status">Connecting to Firebase…</div>
-    <div class="footer" style="border-top:none; padding-top:6px;"><button class="navbtn" id="signout-btn" style="padding:4px 0; color:var(--side-ink-dim);">Sign out</button></div>
-  </nav>
-  <main id="main"></main>
+    <nav class="commands" id="commands">
+      <button type="button" data-go="company"><kbd>F3</kbd>: Company</button>
+      <button type="button" data-go="dashboard"><kbd>Esc</kbd>: Gateway</button>
+      <button type="button" data-go="sales"><kbd>F8</kbd>: New Sale</button>
+      <button type="button" data-go="purchase"><kbd>F9</kbd>: New Purchase</button>
+      <button type="button" data-go="products"><kbd>F4</kbd>: Stock</button>
+      <button type="button" data-go="ledger"><kbd>F5</kbd>: Ledger</button>
+      <button type="button" data-go="reports"><kbd>F7</kbd>: Reports</button>
+      <button type="button" id="help-btn"><kbd>F1</kbd>: Help</button>
+    </nav>
+  </header>
+  <div class="pagebar"><span id="mt-title">Dashboard</span><button type="button" id="pb-close" aria-label="Go to dashboard">X</button></div>
+  <div class="wrap">
+    <section id="companies" aria-label="Company and period"></section>
+    <main id="main"></main>
+    <nav id="sidebar"><ul class="navlist" id="navlist"></ul></nav>
+  </div>
 </div>
 
 <div id="modal-root"></div>
@@ -943,7 +1174,7 @@ function renderSidebar(){
       <div style="margin-top:5px;"><span class="pill ${currentUser.role==='admin'?'good':'neutral'}">${currentUser.role==='admin'?'Admin':'Staff'}</span></div>` : '';
   }
   const items = NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin());
-  if(items.every(it=>it.id!==activeTab)) activeTab = 'dashboard';
+  if(items.every(it=>it.id!==activeTab) && activeTab!=='overview') activeTab = 'dashboard';
   const nav = document.getElementById('navlist');
   nav.innerHTML = items.map(it=>`
     <li><button class="navbtn ${activeTab===it.id?'active':''}" data-tab="${it.id}">
@@ -958,6 +1189,7 @@ function renderSidebar(){
     const cur = items.find(it=>it.id===activeTab);
     mtTitle.textContent = cur ? cur.label : (state.company.name || 'Shop Ledger');
   }
+  renderShell();
 }
 
 function openMobileSidebar(){
@@ -982,6 +1214,160 @@ function closeMobileSidebar(){
 function switchTab(tab){ activeTab = tab; render(); }
 
 /* =========================================================
+   EASY BILL SHELL  (display + navigation only — never edits shop data)
+   ========================================================= */
+function renderShell(){
+  const short = d => d.toLocaleDateString('en-GB',{ day:'2-digit', month:'short', year:'2-digit' });
+  const now = new Date();
+  const dt = document.getElementById('dt');
+  if(dt) dt.textContent = short(now);
+  document.body.classList.toggle('home', activeTab==='dashboard');
+  const mt = document.getElementById('mt-title');
+  if(mt && activeTab==='dashboard') mt.textContent = 'Gateway of ' + (state.company.name || 'Shop Ledger');
+  if(mt && activeTab==='overview') mt.textContent = 'Dashboard';
+  const FK = { company:'F3', products:'F4', ledger:'F5', imei:'F6', reports:'F7', sales:'F8', purchase:'F9' };
+  document.querySelectorAll('#navlist .navbtn').forEach(b=>{ const k=FK[b.dataset.tab], sp=b.lastElementChild; if(k && sp && !sp.textContent.startsWith(k)) sp.textContent = k+': '+sp.textContent; });
+  const pane = document.getElementById('companies');
+  if(!pane) return;
+  const fyStart = now.getMonth()>=3 ? now.getFullYear() : now.getFullYear()-1;
+  const period = `01 Apr ${String(fyStart).slice(2)} to 31 Mar ${String(fyStart+1).slice(2)}`;
+  const dates = [...(state.sales||[]), ...(state.purchases||[]), ...(state.payments||[])].map(x=>x.date).filter(Boolean).sort();
+  const last = dates.length ? short(new Date(dates[dates.length-1]+'T00:00:00')) : 'No entries';
+  const longDate = now.toLocaleDateString('en-GB',{ weekday:'long', day:'2-digit', month:'short', year:'numeric' });
+  pane.innerHTML = `
+    <div class="period"><small>CURRENT PERIOD</small><strong>${esc(period)}</strong>
+      <div class="current-date"><small>TODAY</small><strong>${esc(longDate)}</strong></div></div>
+    <div class="company-head"><span>NAME OF COMPANY</span><span>DATE OF LAST ENTRY</span></div>
+    <div class="company-row" data-go="company"><button type="button" data-go="company">${esc(state.company.name || 'My Mobile Shop')}</button><time>${esc(last)}</time></div>`;
+}
+
+// Top search: jumps to the screen that has the match and pre-fills that screen's own filter.
+function globalFind(raw){
+  const q = (raw||'').trim().toLowerCase();
+  if(!q) return true;
+  const imeiHit = (state.imeiUnits||[]).some(u => String(u.imei||'').toLowerCase().includes(q) || String(u.customer||'').toLowerCase().includes(q));
+  const prodHit = (state.products||[]).some(p => (p.name+' '+(p.brand||'')+' '+categoryOf(p)).toLowerCase().includes(q));
+  if(imeiHit && /\d{4,}/.test(q)){ imeiSearch = raw.trim(); imeiStatusFilter = 'all'; activeTab = 'imei'; render(); return true; }
+  if(prodHit){ productFilter = raw.trim(); productCategoryFilter = 'all'; activeTab = 'products'; render(); return true; }
+  const custHit = customerLedgerList().some(c => c.name.toLowerCase().includes(q) || (c.phone||'').includes(q));
+  if(custHit){ ledgerTab = 'customer'; ledgerSearch = raw.trim(); activeTab = 'ledger'; render(); return true; }
+  const suppHit = supplierLedgerList().some(s => s.name.toLowerCase().includes(q) || (s.phone||'').includes(q));
+  if(suppHit){ ledgerTab = 'supplier'; ledgerSearch = raw.trim(); activeTab = 'ledger'; render(); return true; }
+  if(imeiHit){ imeiSearch = raw.trim(); imeiStatusFilter = 'all'; activeTab = 'imei'; render(); return true; }
+  return false;
+}
+let gwSel = 0;
+function gwItems(){
+  const it = [
+    {sec:'Masters'},
+    {l:'Products & Stock', t:'products', h:'P'}, {l:'Customers & Suppliers', t:'ledger', h:'C'}, {l:'Company Setup', t:'company', h:'O'},
+    {sec:'Transactions'},
+    {l:'Billing / Sale', t:'sales', h:'B'}, {l:'Purchase Entry', t:'purchase', h:'U'},
+    {sec:'Utilities'},
+    {l:'IMEI Tracking', t:'imei', h:'I'}
+  ];
+  if(isAdmin()) it.push({l:'Users', t:'users', h:'S'});
+  it.push({sec:'Reports'}, {l:'Monthly Reports', t:'reports', h:'R'}, {l:'Dashboard', t:'overview', h:'D'}, {pad:1}, {l:'Quit', t:'quit', h:'Q'});
+  return it;
+}
+function hkLabel(l,h){ const k=l.toLowerCase().indexOf((h||'').toLowerCase()); return (!h||k<0)?esc(l):esc(l.slice(0,k))+'<span class="hk">'+esc(l[k])+'</span>'+esc(l.slice(k+1)); }
+function viewGateway(){
+  let i = -1;
+  const list = gwItems();
+  const n = list.filter(x=>x.t).length;
+  if(gwSel >= n) gwSel = 0;
+  return `<div class="gw"><div class="gw-title">Gateway of ${esc(state.company.name || 'Shop Ledger')}</div>` +
+    list.map(x=> x.sec ? `<div class="gw-sec">${x.sec}</div>` : x.pad ? '<div class="gw-pad"></div>' :
+      (i++, `<div class="gw-item ${i===gwSel?'on':''}" data-gw="${x.t}" data-i="${i}" data-h="${x.h||''}">${hkLabel(x.l,x.h)}</div>`)).join('') + `</div>`;
+}
+function gwRun(t){
+  if(t==='quit'){ const b=document.getElementById('signout-btn'); if(b) b.click(); return; }
+  activeTab = t; render();
+}
+(function initShell(){
+  const mainEl = document.getElementById('main');
+  mainEl.addEventListener('click', e=>{ const g=e.target.closest('[data-gw]'); if(g) gwRun(g.dataset.gw); });
+  mainEl.addEventListener('mouseover', e=>{
+    const g=e.target.closest('[data-gw]'); if(!g) return;
+    gwSel = Number(g.dataset.i);
+    mainEl.querySelectorAll('.gw-item').forEach(x=>x.classList.toggle('on', x===g));
+  });
+  const FKEYS = { F3:'company', F4:'products', F5:'ledger', F6:'imei', F7:'reports', F8:'sales', F9:'purchase' };
+  const modalOpen = ()=> document.getElementById('modal-root').innerHTML.trim()!=='';
+  function helpModal(){
+    const rows = [['F1','This help'],['F3','Company Setup'],['F4','Products & Stock'],['F5','Customer / Supplier Ledger'],['F6','IMEI Tracking'],['F7','Monthly Reports'],['F8','Billing / Sale'],['F9','Purchase Entry'],
+      ['Esc','Go back (closes a popup first, then returns to the Gateway)'],['Alt+F','Search'],['Ctrl+A','Accept / Save the current form'],['Enter','Next field'],
+      ['\u2191 \u2193','Move in the Gateway menu'],['Enter / letter','Open the highlighted Gateway item / the highlighted letter']];
+    openModal(`<div class="modal-bg" data-close="modal"><div class="modal" data-stop><div class="modal-head"><h2>Keyboard Shortcuts</h2><button class="modal-close" data-close="modal">&times;</button></div>
+      <table><tbody>${rows.map(r=>`<tr><th style="width:120px">${r[0]}</th><td>${r[1]}</td></tr>`).join('')}</tbody></table></div></div>`);
+  }
+  document.addEventListener('keydown', e=>{
+    const app = document.getElementById('app');
+    if(app.style.display==='none') return;
+    const tag = (e.target.tagName||'');
+    const inField = /INPUT|SELECT|TEXTAREA/.test(tag);
+    const k = e.key;
+    // Esc: close popup, else back to Gateway
+    if(k==='Escape'){
+      if(modalOpen()){ closeModal(); e.preventDefault(); return; }
+      if(inField) e.target.blur();
+      if(activeTab!=='dashboard'){ activeTab='dashboard'; render(); } return;
+    }
+    // F-keys
+    if(k==='F1'){ e.preventDefault(); if(!modalOpen()) helpModal(); return; }
+    if(FKEYS[k] && !e.ctrlKey && !e.altKey){ e.preventDefault(); if(modalOpen()) closeModal(); const items = NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin()); if(items.some(it=>it.id===FKEYS[k])){ activeTab = FKEYS[k]; render(); } return; }
+    // Ctrl+A: accept / save
+    if((e.ctrlKey||e.metaKey) && !e.altKey && k.toLowerCase()==='a'){
+      const btn = document.querySelector('#modal-root [data-action^="save"]') || document.querySelector('#main [data-action^="save"]');
+      if(btn){ e.preventDefault(); btn.click(); } return;
+    }
+    // Enter: move to next field (Tally style)
+    if(k==='Enter' && inField && tag!=='TEXTAREA' && e.target.id!=='find' && e.target.type!=='checkbox'){
+      const box = e.target.closest('#modal-root') || document.getElementById('main');
+      const f = [...box.querySelectorAll('input,select,textarea')].filter(x=>!x.disabled && x.type!=='hidden' && x.offsetParent!==null);
+      const n = f.indexOf(e.target);
+      if(n>=0 && n<f.length-1){ e.preventDefault(); f[n+1].focus(); if(f[n+1].select) try{ f[n+1].select(); }catch(_){} }
+      return;
+    }
+    // Gateway: arrows / Enter / hotkey letter
+    if(activeTab!=='dashboard' || inField || modalOpen()) return;
+    const items = [...mainEl.querySelectorAll('.gw-item')]; if(!items.length) return;
+    if(k==='ArrowDown'||k==='ArrowUp'){
+      e.preventDefault();
+      gwSel = (gwSel + (k==='ArrowDown'?1:-1) + items.length) % items.length;
+      items.forEach((x,i)=>x.classList.toggle('on', i===gwSel));
+    } else if(k==='Enter'){ e.preventDefault(); gwRun(items[gwSel].dataset.gw); }
+    else if(k.length===1 && !e.ctrlKey && !e.altKey && !e.metaKey){
+      const hit = items.find(x=>(x.dataset.h||'').toLowerCase()===k.toLowerCase());
+      if(hit){ e.preventDefault(); gwRun(hit.dataset.gw); }
+    }
+  });
+
+  // any element with data-go="tab" navigates (header command bar, company row, X button)
+  document.addEventListener('click', e=>{
+    const t = e.target.closest('[data-go]');
+    if(!t || !document.getElementById('app').contains(t)) return;
+    const items = NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin());
+    if(items.some(it=>it.id===t.dataset.go)){ activeTab = t.dataset.go; render(); }
+  });
+  const hb = document.getElementById('help-btn'); if(hb) hb.addEventListener('click', ()=>{ helpModal(); });
+  const close = document.getElementById('pb-close');
+  if(close) close.addEventListener('click', ()=>{ activeTab = 'dashboard'; render(); });
+  const find = document.getElementById('find');
+  if(find) find.addEventListener('keydown', e=>{
+    if(e.key!=='Enter') return;
+    const ph = find.placeholder;
+    if(globalFind(find.value)){ find.value = ''; find.blur(); }
+    else { find.value = ''; find.placeholder = 'No match found'; setTimeout(()=>{ find.placeholder = ph; }, 1800); }
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase()==='f' && find && document.getElementById('app').style.display!=='none'){
+      e.preventDefault(); find.focus(); find.select();
+    }
+  });
+})();
+
+/* =========================================================
    RENDER ROOT
    ========================================================= */
 function render(){
@@ -996,7 +1382,8 @@ function render(){
   if(active && main.contains(active) && active.id){
     focusInfo = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
   }
-  if(activeTab==='dashboard') main.innerHTML = viewDashboard();
+  if(activeTab==='dashboard') main.innerHTML = viewGateway();
+  else if(activeTab==='overview') main.innerHTML = viewDashboard();
   else if(activeTab==='company') main.innerHTML = viewCompany();
   else if(activeTab==='products') main.innerHTML = viewProducts();
   else if(activeTab==='purchase') main.innerHTML = viewPurchase();
