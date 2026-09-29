@@ -1167,7 +1167,7 @@ const NAV_ITEMS = [
 ];
 
 function renderSidebar(){
-  document.getElementById('sb-shopname').textContent = state.company.name || 'Billzen';
+  document.getElementById('sb-shopname').textContent = 'Billzen';
   const sbUser = document.getElementById('sb-user');
   if(sbUser){
     sbUser.innerHTML = currentUser ? `Signed in as <strong style="color:#fff;">${esc(currentUser.username)}</strong>
@@ -1223,7 +1223,7 @@ function renderShell(){
   if(dt) dt.textContent = short(now);
   document.body.classList.toggle('home', activeTab==='dashboard');
   const mt = document.getElementById('mt-title');
-  if(mt && activeTab==='dashboard') mt.textContent = 'Gateway of ' + (state.company.name || 'Billzen');
+  if(mt && activeTab==='dashboard') mt.textContent = 'Gateway of Billzen';
   if(mt && activeTab==='overview') mt.textContent = 'Dashboard';
   const FK = { company:'F3', products:'F4', ledger:'F5', imei:'F6', reports:'F7', sales:'F8', purchase:'F9' };
   document.querySelectorAll('#navlist .navbtn').forEach(b=>{ const k=FK[b.dataset.tab], sp=b.lastElementChild; if(k && sp && !sp.textContent.startsWith(k)) sp.textContent = k+': '+sp.textContent; });
@@ -1276,7 +1276,7 @@ function viewGateway(){
   const list = gwItems();
   const n = list.filter(x=>x.t).length;
   if(gwSel >= n) gwSel = 0;
-  return `<div class="gw"><div class="gw-title">Gateway of ${esc(state.company.name || 'Billzen')}</div>` +
+  return `<div class="gw"><div class="gw-title">Gateway of Billzen</div>` +
     list.map(x=> x.sec ? `<div class="gw-sec">${x.sec}</div>` : x.pad ? '<div class="gw-pad"></div>' :
       (i++, `<div class="gw-item ${i===gwSel?'on':''}" data-gw="${x.t}" data-i="${i}" data-h="${x.h||''}">${hkLabel(x.l,x.h)}</div>`)).join('') + `</div>`;
 }
