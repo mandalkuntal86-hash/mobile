@@ -689,8 +689,9 @@ body.home .navlist li:not(:has([data-tab="company"])):not(:has([data-tab="users"
         <button class="btn sm ghost login-install" id="install-app-btn" type="button" title="Install Billzen on this device">Install App</button>
       </div>
       <h1>Welcome back</h1>
-      <div class="sub">Sign in to continue managing your shop</div>
+      <div class="sub" id="login-status" role="status" aria-live="polite">Connecting to your shop data...</div>
       <div class="login-error" id="login-error"></div>
+      <div style="margin-bottom:16px;"><button class="btn ghost" id="retry-db-btn" type="button" hidden>Retry Connection</button></div>
       <div class="field"><label>Username</label><input type="text" id="login-email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Enter username"></div>
       <div class="field"><label>Password</label><input type="password" id="login-password" autocomplete="current-password" placeholder="Enter password"></div>
       <button class="btn primary" id="login-submit">Sign In</button>
@@ -814,6 +815,7 @@ let activeTab = "dashboard";
 let saveTimer = null;
 
 async function loadState(){
+  let loaded = false;
   try{
     const snap = await getDoc(shopDocRef);
     if(snap.exists()){
@@ -823,9 +825,14 @@ async function loadState(){
       await setDoc(shopDocRef, state);
     }
     fbStatus = 'ok'; fbError='';
+    loaded = true;
   }catch(e){
     console.error('Firebase load failed', e);
     fbStatus = 'error'; fbError = e.message||'';
+  }
+  if(!loaded){
+    renderConnBadge();
+    return false;
   }
   let dirty = false;
   if(migrateProductImeiFields()) dirty = true;
@@ -833,6 +840,7 @@ async function loadState(){
   if(migrateProductTrackImeiFields()) dirty = true;
   if(dirty) saveState();
   renderConnBadge();
+  return true;
 }
 // One-time backfill: older data may have an IMEI typed straight into a product's
 // own "IMEI / Serial" field (via Edit Product) without ever going through Purchase
@@ -3785,6 +3793,8 @@ function attachModalHandlers(){
   const userInp = document.getElementById('login-email');
   const passInp = document.getElementById('login-password');
   const submitBtn = document.getElementById('login-submit');
+  const loginStatus = document.getElementById('login-status');
+  const retryDbBtn = document.getElementById('retry-db-btn');
   const signoutBtn = document.getElementById('signout-btn');
   const AUTO_LOGOUT_MS = 20 * 60 * 1000;
   let logoutTimer = null;
@@ -3849,27 +3859,31 @@ function attachModalHandlers(){
     performLogout();
   };
 
-  (async function boot(){
-    const loginStatus = loginScreen.querySelector('.sub');
+  async function boot(){
     submitBtn.disabled = true;
+    retryDbBtn.hidden = true;
     if(loginStatus) loginStatus.textContent = 'Connecting to your shop data...';
-    try{
-      await loadState();
-      seedAdminIfNeeded();
-      const savedUsername = localStorage.getItem(SESSION_KEY);
-      const rec = savedUsername ? state.users.find(u=>u.username===savedUsername) : null;
-      if(rec){
-        signInAs(rec);
-      }else{
-        localStorage.removeItem(SESSION_KEY);
-        appRoot.style.display = 'none';
-        loginScreen.style.display = 'flex';
-      }
-    }finally{
-      submitBtn.disabled = false;
-      if(loginStatus) loginStatus.textContent = 'Sign in to continue managing your shop';
+    const loaded = await loadState();
+    if(!loaded){
+      if(loginStatus) loginStatus.textContent = `Database connection failed: ${fbError || 'Check your internet connection and Firestore rules.'}`;
+      retryDbBtn.hidden = false;
+      return;
     }
-  })();
+    seedAdminIfNeeded();
+    const savedUsername = localStorage.getItem(SESSION_KEY);
+    const rec = savedUsername ? state.users.find(u=>u.username===savedUsername) : null;
+    if(rec){
+      signInAs(rec);
+    }else{
+      localStorage.removeItem(SESSION_KEY);
+      appRoot.style.display = 'none';
+      loginScreen.style.display = 'flex';
+    }
+    submitBtn.disabled = false;
+    if(loginStatus) loginStatus.textContent = 'Sign in to continue managing your shop';
+  }
+  retryDbBtn.addEventListener('click', boot);
+  boot();
 })();
 
 if('serviceWorker' in navigator){
