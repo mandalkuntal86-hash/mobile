@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shop Ledger — Mobile Shop Billing</title>
+<title>Billzen — Mobile Shop Billing</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -648,7 +648,7 @@ body.home .navlist li:not(:has([data-tab="company"])):not(:has([data-tab="users"
   <div class="login-shell">
     <div class="login-visual">
       <div class="login-badge">Smart • Secure • Fast</div>
-      <h2>Mobile Shop Ledger</h2>
+      <h2>Billzen</h2>
       <p>Manage billing, stock, purchases, payments, and customer insights from one modern dashboard.</p>
       <ul class="login-features">
         <li>📊 Sales &amp; profit overview</li>
@@ -673,7 +673,7 @@ body.home .navlist li:not(:has([data-tab="company"])):not(:has([data-tab="users"
 <div id="app" style="display:none;">
   <header class="eb-header">
     <div class="topline">
-      <b class="brand" id="sb-shopname">Shop Ledger</b>
+      <b class="brand" id="sb-shopname">Billzen</b>
       <input id="find" class="find" type="text" placeholder="Find product, IMEI, customer or supplier (Alt+F)" aria-label="Search" autocomplete="off">
       <div class="top-actions">
         <span id="sb-status">Connecting to Firebase…</span>
@@ -1167,7 +1167,7 @@ const NAV_ITEMS = [
 ];
 
 function renderSidebar(){
-  document.getElementById('sb-shopname').textContent = state.company.name || 'Shop Ledger';
+  document.getElementById('sb-shopname').textContent = state.company.name || 'Billzen';
   const sbUser = document.getElementById('sb-user');
   if(sbUser){
     sbUser.innerHTML = currentUser ? `Signed in as <strong style="color:#fff;">${esc(currentUser.username)}</strong>
@@ -1187,7 +1187,7 @@ function renderSidebar(){
   const mtTitle = document.getElementById('mt-title');
   if(mtTitle){
     const cur = items.find(it=>it.id===activeTab);
-    mtTitle.textContent = cur ? cur.label : (state.company.name || 'Shop Ledger');
+    mtTitle.textContent = cur ? cur.label : (state.company.name || 'Billzen');
   }
   renderShell();
 }
@@ -1223,7 +1223,7 @@ function renderShell(){
   if(dt) dt.textContent = short(now);
   document.body.classList.toggle('home', activeTab==='dashboard');
   const mt = document.getElementById('mt-title');
-  if(mt && activeTab==='dashboard') mt.textContent = 'Gateway of ' + (state.company.name || 'Shop Ledger');
+  if(mt && activeTab==='dashboard') mt.textContent = 'Gateway of ' + (state.company.name || 'Billzen');
   if(mt && activeTab==='overview') mt.textContent = 'Dashboard';
   const FK = { company:'F3', products:'F4', ledger:'F5', imei:'F6', reports:'F7', sales:'F8', purchase:'F9' };
   document.querySelectorAll('#navlist .navbtn').forEach(b=>{ const k=FK[b.dataset.tab], sp=b.lastElementChild; if(k && sp && !sp.textContent.startsWith(k)) sp.textContent = k+': '+sp.textContent; });
@@ -1276,7 +1276,7 @@ function viewGateway(){
   const list = gwItems();
   const n = list.filter(x=>x.t).length;
   if(gwSel >= n) gwSel = 0;
-  return `<div class="gw"><div class="gw-title">Gateway of ${esc(state.company.name || 'Shop Ledger')}</div>` +
+  return `<div class="gw"><div class="gw-title">Gateway of ${esc(state.company.name || 'Billzen')}</div>` +
     list.map(x=> x.sec ? `<div class="gw-sec">${x.sec}</div>` : x.pad ? '<div class="gw-pad"></div>' :
       (i++, `<div class="gw-item ${i===gwSel?'on':''}" data-gw="${x.t}" data-i="${i}" data-h="${x.h||''}">${hkLabel(x.l,x.h)}</div>`)).join('') + `</div>`;
 }
