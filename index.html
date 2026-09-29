@@ -1295,8 +1295,8 @@ function gwRun(t){
   const FKEYS = { F3:'company', F4:'products', F5:'ledger', F6:'imei', F7:'reports', F8:'sales', F9:'purchase' };
   const modalOpen = ()=> document.getElementById('modal-root').innerHTML.trim()!=='';
   function helpModal(){
-    const rows = [['F1','This help'],['F3','Company Setup'],['F4','Products & Stock'],['F5','Customer / Supplier Ledger'],['F6','IMEI Tracking'],['F7','Monthly Reports'],['F8','Billing / Sale'],['F9','Purchase Entry'],
-      ['Esc','Go back (closes a popup first, then returns to the Gateway)'],['Alt+F','Search'],['Ctrl+A','Accept / Save the current form'],['Enter','Next field'],
+    const rows = [['F1','This help'],['F2','Bill date (Billing / Sale)'],['F3','Company Setup'],['F4','Products & Stock'],['F5','Customer / Supplier Ledger'],['F6','IMEI Tracking'],['F7','Monthly Reports'],['F8','Billing / Sale'],['F9','Purchase Entry'],
+      ['Esc','Go back (closes a popup first, then returns to the Gateway)'],['Backspace','Previous field when empty / at start'],['Alt+F','Search'],['Alt+I','Add item (Billing / Sale)'],['Ctrl+A','Accept / Save the current form'],['Enter','Select / next field'],
       ['\u2191 \u2193','Move in the Gateway menu'],['Enter / letter','Open the highlighted Gateway item / the highlighted letter']];
     openModal(`<div class="modal-bg" data-close="modal"><div class="modal" data-stop><div class="modal-head"><h2>Keyboard Shortcuts</h2><button class="modal-close" data-close="modal">&times;</button></div>
       <table><tbody>${rows.map(r=>`<tr><th style="width:120px">${r[0]}</th><td>${r[1]}</td></tr>`).join('')}</tbody></table></div></div>`);
@@ -1315,14 +1315,87 @@ function gwRun(t){
     }
     // F-keys
     if(k==='F1'){ e.preventDefault(); if(!modalOpen()) helpModal(); return; }
+    if(k==='F2' && activeTab==='sales' && !modalOpen()){
+      e.preventDefault();
+      const date = document.getElementById('sa-date');
+      if(date) date.focus();
+      return;
+    }
     if(FKEYS[k] && !e.ctrlKey && !e.altKey){ e.preventDefault(); if(modalOpen()) closeModal(); const items = NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin()); if(items.some(it=>it.id===FKEYS[k])){ activeTab = FKEYS[k]; render(); } return; }
+    if(e.altKey && !e.ctrlKey && !e.metaKey && k.toLowerCase()==='i' && activeTab==='sales' && !modalOpen()){
+      e.preventDefault();
+      const addItem = document.querySelector('#main [data-action="sa-add-row"]');
+      if(addItem) addItem.click();
+      return;
+    }
     // Ctrl+A: accept / save
     if((e.ctrlKey||e.metaKey) && !e.altKey && k.toLowerCase()==='a'){
       const btn = document.querySelector('#modal-root [data-action^="save"]') || document.querySelector('#main [data-action^="save"]');
       if(btn){ e.preventDefault(); btn.click(); } return;
     }
+    // Backspace: move backward only when there is no text before the caret.
+    if(k==='Backspace' && inField && e.target.type!=='checkbox' && e.target.type!=='radio'){
+      const field = e.target;
+      let atStart = !field.value;
+      try{
+        if(typeof field.selectionStart==='number') atStart = field.selectionStart===0 && field.selectionEnd===0;
+      }catch(_){}
+      if(atStart){
+        const box = field.closest('#modal-root') || document.getElementById('main');
+        const fields = [...box.querySelectorAll('input,select,textarea')].filter(x=>!x.disabled && x.type!=='hidden' && x.offsetParent!==null);
+        const index = fields.indexOf(field);
+        if(index>0){
+          e.preventDefault();
+          const previous = fields[index-1];
+          previous.focus();
+          if(typeof previous.setSelectionRange==='function' && typeof previous.value==='string'){
+            try{ previous.setSelectionRange(previous.value.length, previous.value.length); }catch(_){}
+          }
+          return;
+        }
+      }
+    }
     // Enter: move to next field (Tally style)
     if(k==='Enter' && inField && tag!=='TEXTAREA' && e.target.id!=='find' && e.target.type!=='checkbox'){
+      const saleRow = activeTab==='sales' ? e.target.closest('#sale-item-rows .itemrow') : null;
+      if(saleRow){
+        const i = Number(saleRow.dataset.row);
+        if(e.target.classList.contains('sa-product')){
+          e.preventDefault();
+          const query = e.target.value.trim().toLowerCase();
+          if(!query) return;
+          const matches = state.products.filter(p=>p.name.trim().toLowerCase().startsWith(query));
+          const product = state.products.find(p=>p.name.trim().toLowerCase()===query) || (matches.length===1 ? matches[0] : null);
+          if(!product) return;
+          saleItems[i].query = product.name;
+          saleItems[i].productId = product.id;
+          saleItems[i].price = product.salePrice;
+          saleItems[i].imeiUnitIds = [];
+          render();
+          const qty = document.querySelector(`.sa-qty[data-i="${i}"]`);
+          if(qty){ qty.focus(); qty.select(); }
+          return;
+        }
+        if(e.target.classList.contains('sa-qty')){
+          e.preventDefault();
+          saleItems[i].qty = normalizeItemQty(e.target.value, 1);
+          render();
+          const price = document.querySelector(`.sa-price[data-i="${i}"]`);
+          if(price){ price.focus(); price.select(); }
+          return;
+        }
+        if(e.target.classList.contains('sa-price')){
+          e.preventDefault();
+          saleItems[i].price = e.target.value;
+          syncSaleTotalsOnly();
+          const imei = [...document.querySelectorAll(`.sa-imei[data-i="${i}"]`)].find(field=>!field.value);
+          if(imei){ imei.focus(); return; }
+          const nextProduct = document.querySelector(`.sa-product[data-i="${i+1}"]`);
+          if(nextProduct){ nextProduct.focus(); nextProduct.select(); }
+          else document.querySelector('#main [data-action="sa-add-row"]')?.click();
+          return;
+        }
+      }
       const box = e.target.closest('#modal-root') || document.getElementById('main');
       const f = [...box.querySelectorAll('input,select,textarea')].filter(x=>!x.disabled && x.type!=='hidden' && x.offsetParent!==null);
       const n = f.indexOf(e.target);
@@ -3068,7 +3141,13 @@ function attachHandlers(){
 
   // Sales
   const saAddRow = main.querySelector('[data-action="sa-add-row"]');
-  if(saAddRow) saAddRow.addEventListener('click', ()=>{ saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],query:''}); render(); });
+  if(saAddRow) saAddRow.addEventListener('click', ()=>{
+    saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],query:''});
+    const i = saleItems.length - 1;
+    render();
+    const product = document.querySelector(`.sa-product[data-i="${i}"]`);
+    if(product) product.focus();
+  });
   main.querySelectorAll('[data-action="sa-rm-row"]').forEach(b=>b.addEventListener('click', ()=>{
     saleItems.splice(Number(b.dataset.i),1);
     if(saleItems.length===0) saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],query:''});
@@ -3099,6 +3178,11 @@ function attachHandlers(){
     if(!Array.isArray(saleItems[i].imeiUnitIds)) saleItems[i].imeiUnitIds = [];
     saleItems[i].imeiUnitIds[u] = e.target.value;
     render();
+    const nextImei = [...document.querySelectorAll(`.sa-imei[data-i="${i}"]`)].find(field=>!field.value);
+    if(nextImei){ nextImei.focus(); return; }
+    const nextProduct = document.querySelector(`.sa-product[data-i="${i+1}"]`);
+    if(nextProduct){ nextProduct.focus(); nextProduct.select(); }
+    else document.querySelector('#main [data-action="sa-add-row"]')?.click();
   }));
   const saveSaleBtn = main.querySelector('[data-action="save-sale"]');
   if(saveSaleBtn) saveSaleBtn.addEventListener('click', doSaveSale);
