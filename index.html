@@ -584,6 +584,7 @@ tr:hover td{ background:#fff8dc; }
 .login-card .field label{ color:#4a6276; letter-spacing:.03em; }
 .login-card .field input{ border-radius:0; background:#fff; border:1px solid #9fbad0; padding:10px 12px; }
 .login-card .field input:focus{ box-shadow:none; border-color:#81bae3; background:#f3faff; outline:2px solid #81bae3; }
+.login-card .login-brand-row .login-install{ width:auto; flex:none; padding:5px 10px; white-space:nowrap; }
 .login-error{ border-radius:0; }
 .login-card button{ border-radius:0; }
 .login-card button:hover{ transform:none; }
@@ -685,6 +686,7 @@ body.home .navlist li:not(:has([data-tab="company"])):not(:has([data-tab="users"
     <div class="login-card">
       <div class="login-brand-row">
         <span class="brand-pill">Eldorado</span>
+        <button class="btn sm ghost login-install" id="install-app-btn" type="button" title="Install Billzen on this device">Install App</button>
       </div>
       <h1>Welcome back</h1>
       <div class="sub">Sign in to continue managing your shop</div>
@@ -728,6 +730,14 @@ body.home .navlist li:not(:has([data-tab="company"])):not(:has([data-tab="users"
 </div>
 
 <div id="modal-root"></div>
+
+<script>
+window.billzenInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', event=>{
+  event.preventDefault();
+  window.billzenInstallPrompt = event;
+});
+</script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -3859,6 +3869,30 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(error=>console.error('Service worker registration failed', error));
   });
 }
+
+(function initInstallButton(){
+  const button = document.getElementById('install-app-btn');
+  if(!button) return;
+  const isStandalone = ()=> matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  if(isStandalone()) button.hidden = true;
+  button.addEventListener('click', async ()=>{
+    const prompt = window.billzenInstallPrompt;
+    if(prompt){
+      window.billzenInstallPrompt = null;
+      await prompt.prompt();
+      const choice = await prompt.userChoice;
+      if(choice.outcome==='accepted') button.hidden = true;
+      return;
+    }
+    if(isIOS){
+      alert('To install Billzen on iPhone or iPad: tap Share in Safari, then choose Add to Home Screen.');
+      return;
+    }
+    alert('Open your browser menu and choose Install app or Add to Home screen. In Edge, look under Apps.');
+  });
+  window.addEventListener('appinstalled', ()=>{ button.hidden = true; });
+})();
 </script>
 </body>
 </html>
