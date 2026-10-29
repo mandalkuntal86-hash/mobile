@@ -907,7 +907,7 @@ tr:hover td{ box-shadow:inset 0 -2px 0 #e6c24a; }
   <header class="eb-header">
     <div class="topline">
       <b class="brand" id="sb-shopname">Billzen</b>
-      <input id="find" class="find" type="text" placeholder="Find product, IMEI, customer or supplier (Alt+F)" aria-label="Search" autocomplete="off">
+      <input id="find" class="find" type="text" placeholder="Find product, IMEI/SL No., customer or supplier (Alt+F)" aria-label="Search" autocomplete="off">
       <div class="top-actions">
         <span id="sb-status">Connecting to Firebase…</span>
         <span id="sb-user"></span>
@@ -1040,7 +1040,7 @@ async function loadState(){
   return true;
 }
 // One-time backfill: older data may have an IMEI typed straight into a product's
-// own "IMEI / Serial" field (via Edit Product) without ever going through Purchase
+// own "IMEI/SL No." field (via Edit Product) without ever going through Purchase
 // Entry or "+ Add IMEI", so it never became a trackable, sellable unit. Pull those in.
 function migrateProductImeiFields(){
   let changed = false;
@@ -1143,16 +1143,16 @@ function reconcileProductStocks(){
 
   (state.products||[]).forEach(p=>{
     if(tracksImei(p)){
-      const expected = Math.max(0, (trackedPurchasedByProduct[p.id]||0) - (trackedSoldByProduct[p.id]||0));
+      const expected = (trackedPurchasedByProduct[p.id]||0) - (trackedSoldByProduct[p.id]||0); // may be negative
       const live = (state.imeiUnits||[]).filter(u => u.productId===p.id && u.status==='in_stock');
-      if(live.length > expected){
-        const extra = live.slice(expected);
+      if(live.length > Math.max(0,expected)){
+        const extra = live.slice(Math.max(0,expected));
         extra.forEach(u => { u.status = 'stale'; });
         state.imeiUnits = (state.imeiUnits||[]).filter(u => !(u.productId===p.id && u.status==='stale'));
       }
       p.stock = expected;
     }else{
-      p.stock = Math.max(0, Number(stockByProduct[p.id]||0));
+      p.stock = Number(stockByProduct[p.id]||0); // non-IMEI products may go negative (billed before stock is entered)
     }
   });
 }
@@ -1265,9 +1265,19 @@ function normalizeItemQty(value, fallback=1){
   if(!Number.isFinite(n) || n <= 0) return fallback;
   return Math.max(1, Math.round(n));
 }
+// An IMEI/SL No. typed on a bill before its purchase was entered (negative billing) has no
+// purchase yet; the later purchase may claim it instead of being rejected as a duplicate.
+function adoptableImeiUnit(key, productId){
+  return (state.imeiUnits||[]).find(u=>u.imei.toLowerCase()===key && !u.purchaseId && u.status==='sold' && u.productId===productId);
+}
+function imeiTakenForPurchase(key, productId, ownPurchaseId){
+  return (state.imeiUnits||[]).some(u=>u.imei.toLowerCase()===key && (!ownPurchaseId || u.purchaseId!==ownPurchaseId) && u!==adoptableImeiUnit(key, productId));
+}
 function addImeiUnitsFromPurchase(productId, productName, imeiText, purchaseId, purchaseDate){
   const list = parseImeiLines(imeiText);
   list.forEach(imei=>{
+    const adopt = adoptableImeiUnit(imei.toLowerCase(), productId);
+    if(adopt){ adopt.purchaseId = purchaseId; adopt.purchaseDate = purchaseDate; return; }
     if((state.imeiUnits||[]).some(u=>u.imei.toLowerCase()===imei.toLowerCase())) return; // avoid duplicates
     state.imeiUnits.push({ id: uid('imei'), imei, productId, productName, status:'in_stock', purchaseId, purchaseDate, saleId:null, saleDate:null, customer:'', customerPhone:'' });
   });
@@ -1400,7 +1410,7 @@ const NAV_ITEMS = [
   { id:'sales', label:'Billing / Sale', ic:'&#128179;' },
   { id:'purchase', label:'Purchase Entry', ic:'&#128230;' },
   { id:'products', label:'Products & Stock', ic:'&#128241;' },
-  { id:'imei', label:'IMEI Tracking', ic:'&#128270;' },
+  { id:'imei', label:'IMEI/SL No. Tracking', ic:'&#128270;' },
   { id:'ledger', label:'Customer Ledger', ic:'&#128218;' },
   { id:'reports', label:'Monthly Reports', ic:'&#128202;' },
   { id:'users', label:'Users', ic:'&#128100;', adminOnly:true },
@@ -1505,7 +1515,7 @@ function gwItems(){
     {sec:'Transactions'},
     {l:'Billing / Sale', t:'sales', h:'B'}, {l:'Purchase Entry', t:'purchase', h:'U'},
     {sec:'Utilities'},
-    {l:'IMEI Tracking', t:'imei', h:'I'}
+    {l:'IMEI/SL No. Tracking', t:'imei', h:'I'}
   ];
   if(isAdmin()) it.push({l:'Users', t:'users', h:'S'});
   it.push({sec:'Reports'}, {l:'Monthly Reports', t:'reports', h:'R'}, {l:'Dashboard', t:'overview', h:'D'}, {pad:1}, {l:'Quit', t:'quit', h:'Q'});
@@ -1536,7 +1546,7 @@ function gwRun(t){
   const FKEYS = { F3:'company', F4:'products', F5:'ledger', F6:'imei', F7:'reports', F8:'sales', F9:'purchase' };
   const modalOpen = ()=> document.getElementById('modal-root').innerHTML.trim()!=='';
   function helpModal(){
-    const rows = [['F1','This help'],['F2','Bill date (Billing / Sale)'],['F3','Company Setup'],['F4','Products & Stock'],['F5','Customer / Supplier Ledger'],['F6','IMEI Tracking'],['F7','Monthly Reports'],['F8','Billing / Sale'],['F9','Purchase Entry'],
+    const rows = [['F1','This help'],['F2','Bill date (Billing / Sale)'],['F3','Company Setup'],['F4','Products & Stock'],['F5','Customer / Supplier Ledger'],['F6','IMEI/SL No. Tracking'],['F7','Monthly Reports'],['F8','Billing / Sale'],['F9','Purchase Entry'],
       ['Esc','Go back (closes a popup first, then returns to the Gateway)'],['Backspace','Previous field when empty / at start'],['Alt+F','Search'],['Alt+I','Add item (Billing / Sale)'],['Ctrl+A','Accept / Save the current form'],['Enter','Select / next field'],
       ['\u2191 \u2193','Move in the Gateway menu'],['Enter / letter','Open the highlighted Gateway item / the highlighted letter']];
     openModal(`<div class="modal-bg" data-close="modal"><div class="modal" data-stop><div class="modal-head"><h2>Keyboard Shortcuts</h2><button class="modal-close" data-close="modal">&times;</button></div>
@@ -1611,10 +1621,20 @@ function gwRun(t){
           saleItems[i].query = product.name;
           saleItems[i].productId = product.id;
           saleItems[i].price = product.salePrice;
-          saleItems[i].imeiUnitIds = [];
+          saleItems[i].imeiUnitIds = []; saleItems[i].manualImeis = [];
           render();
           const qty = document.querySelector(`.sa-qty[data-i="${i}"]`);
           if(qty){ qty.focus(); qty.select(); }
+          return;
+        }
+        if(e.target.classList.contains('sa-manual')){
+          e.preventDefault();
+          saleItems[i].manualImeis[Number(e.target.dataset.u)] = e.target.value;
+          const nextImei = [...document.querySelectorAll(`.sa-manual[data-i="${i}"]`)].find(f=>!f.value);
+          if(nextImei){ nextImei.focus(); return; }
+          const nextProduct = document.querySelector(`.sa-product[data-i="${i+1}"]`);
+          if(nextProduct){ nextProduct.focus(); nextProduct.select(); }
+          else document.querySelector('#main [data-action="sa-add-row"]')?.click();
           return;
         }
         if(e.target.classList.contains('sa-qty')){
@@ -1629,7 +1649,7 @@ function gwRun(t){
           e.preventDefault();
           saleItems[i].price = e.target.value;
           syncSaleTotalsOnly();
-          const imei = [...document.querySelectorAll(`.sa-imei[data-i="${i}"]`)].find(field=>!field.value);
+          const imei = [...document.querySelectorAll(`.sa-manual[data-i="${i}"]`)].find(field=>!field.value);
           if(imei){ imei.focus(); return; }
           const nextProduct = document.querySelector(`.sa-product[data-i="${i+1}"]`);
           if(nextProduct){ nextProduct.focus(); nextProduct.select(); }
@@ -1884,11 +1904,11 @@ function viewProducts(){
         </div>
       </div>
       ${list.length===0 ? emptyState('No products found','Add a product to start tracking stock.') : `
-      <table><thead><tr><th>Product</th><th>Category</th><th>Brand</th><th>IMEI Tracking</th><th class="num">Purchase Price</th><th class="num">Sale Price</th><th class="num">Stock</th><th></th></tr></thead>
+      <table><thead><tr><th>Product</th><th>Category</th><th>Brand</th><th>IMEI/SL No. Tracking</th><th class="num">Purchase Price</th><th class="num">Sale Price</th><th class="num">Stock</th><th></th></tr></thead>
       <tbody>
       ${list.map(p=>`
         <tr>
-          <td><strong>${esc(p.name)}</strong>${p.imei?`<div style="font-size:11px;color:var(--ink-soft)">IMEI: ${esc(p.imei)}</div>`:''}${(()=>{ const n = Math.max(0, Number(p.stock)||0); return n>0?`<div style="margin-top:2px;"><span class="pill instock">${n} IMEI in stock</span></div>`:''; })()}</td>
+          <td><strong>${esc(p.name)}</strong>${p.imei?`<div style="font-size:11px;color:var(--ink-soft)">IMEI/SL No.: ${esc(p.imei)}</div>`:''}${(()=>{ const n = Math.max(0, Number(p.stock)||0); return (p.trackImei!==false && n>0)?`<div style="margin-top:2px;"><span class="pill instock">${n} in stock (IMEI/SL No.)</span></div>`:''; })()}</td>
           <td><span class="pill neutral">${esc(categoryOf(p))}</span></td>
           <td>${esc(p.brand||'-')}</td>
           <td>${p.trackImei!==false ? `<span class="pill info">Yes</span>` : `<span class="pill neutral">No</span>`}</td>
@@ -1948,11 +1968,11 @@ function productFormModal(existing){
         <div class="field" style="grid-column:1/-1;">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
             <input type="checkbox" id="p-track-imei" ${trackImei?'checked':''} style="width:auto;">
-            <span>Track IMEI / Serial numbers for this product</span>
+            <span>Track IMEI/SL No. for this product (mandatory on purchase &amp; sale)</span>
           </label>
-          <div class="imei-hint" style="margin-top:4px;">Turn this off for products you don't need to track unit-by-unit (accessories, cables, general items). IMEI/Serial then becomes optional and won't be required at purchase or sale.</div>
+          <div class="imei-hint" style="margin-top:4px;">ON: IMEI/SL No. is mandatory on every purchase and sale (typed manually on the bill). OFF (accessories, cables, general items): IMEI/SL No. is optional. Either way, a bill can be made even when stock is zero (stock goes negative).</div>
         </div>
-        <div class="field" id="p-imei-field-wrap"><label>IMEI / Serial (optional)</label><input type="text" id="p-imei" value="${esc(p.imei)}"></div>
+        <div class="field" id="p-imei-field-wrap"><label>IMEI/SL No. (optional)</label><input type="text" id="p-imei" value="${esc(p.imei)}"></div>
         <div class="field"><label>HSN/SAC Code (for GST invoice)</label><input type="text" id="p-hsn" value="${esc(p.hsn)}" placeholder="e.g. 85171200"></div>
         <div class="field"><label>Purchase Price (₹)</label><input type="number" id="p-purchase" value="${p.purchasePrice}"></div>
         <div class="field"><label>Sale Price (₹, incl. GST)</label><input type="number" id="p-sale" value="${p.salePrice}"></div>
@@ -1991,10 +2011,10 @@ function viewImei(){
   const list = imeiUnitsFiltered();
   return `
     <div class="pagehead">
-      <div><h1>IMEI Tracking</h1><div class="desc">Every serialised mobile unit — where it is, and who bought it</div></div>
+      <div><h1>IMEI/SL No. Tracking</h1><div class="desc">Every IMEI/SL No. unit — where it is, and who bought it</div></div>
       <div>
         <button class="btn ghost" data-action="imei-export">&#8681; Export CSV</button>
-        <button class="btn primary" data-action="add-imei">+ Add IMEI</button>
+        <button class="btn primary" data-action="add-imei">+ Add IMEI/SL No.</button>
       </div>
     </div>
     <div class="kpis">
@@ -2005,15 +2025,15 @@ function viewImei(){
     </div>
     <div class="card">
       <div class="row-between" style="margin-bottom:12px;">
-        <input class="searchbar" style="margin-bottom:0;" type="text" placeholder="Search IMEI, product or customer…" id="imei-search" value="${esc(imeiSearch)}">
+        <input class="searchbar" style="margin-bottom:0;" type="text" placeholder="Search IMEI/SL No., product or customer…" id="imei-search" value="${esc(imeiSearch)}">
         <div class="filter-tabs">
           <button data-action="imei-filter" data-status="all" class="${imeiStatusFilter==='all'?'active':''}">All (${all.length})</button>
           <button data-action="imei-filter" data-status="in_stock" class="${imeiStatusFilter==='in_stock'?'active':''}">In Stock (${inStock})</button>
           <button data-action="imei-filter" data-status="sold" class="${imeiStatusFilter==='sold'?'active':''}">Sold (${sold})</button>
         </div>
       </div>
-      ${list.length===0 ? emptyState('No IMEI units found', 'Add IMEIs while entering a purchase, or manually with “+ Add IMEI”.') : `
-      <table><thead><tr><th>IMEI / Serial</th><th>Product</th><th>Status</th><th>Purchased</th><th>Sold</th><th>Customer</th><th></th></tr></thead><tbody>
+      ${list.length===0 ? emptyState('No IMEI/SL No. units found', 'Add IMEI/SL No. while entering a purchase, or manually with “+ Add IMEI/SL No.”.') : `
+      <table><thead><tr><th>IMEI/SL No.</th><th>Product</th><th>Status</th><th>Purchased</th><th>Sold</th><th>Customer</th><th></th></tr></thead><tbody>
       ${list.map(u=>`
         <tr>
           <td><span class="mono-chip">${esc(u.imei)}</span></td>
@@ -2039,8 +2059,8 @@ function imeiFormModal(existing){
   return `
   <div class="modal-bg" data-close="modal">
     <div class="modal" data-stop>
-      <div class="modal-head"><h2>${existing? 'Edit IMEI':'Add IMEI'}</h2><button class="modal-close" data-close="modal">&times;</button></div>
-      <div class="field"><label>IMEI / Serial Number</label><input type="text" id="im-imei" value="${esc(u.imei)}" placeholder="15-digit IMEI"></div>
+      <div class="modal-head"><h2>${existing? 'Edit IMEI/SL No.':'Add IMEI/SL No.'}</h2><button class="modal-close" data-close="modal">&times;</button></div>
+      <div class="field"><label>IMEI/SL No.</label><input type="text" id="im-imei" value="${esc(u.imei)}" placeholder="IMEI/SL No."></div>
       <div class="field"><label>Product</label><select id="im-product"><option value="">Select product…</option>${options}</select></div>
       <div class="grid cols-2">
         <div class="field"><label>Purchase / Stock-in Date</label><input type="date" id="im-date" value="${u.purchaseDate||todayISO()}"></div>
@@ -2060,7 +2080,7 @@ function imeiFormModal(existing){
 }
 
 function imeiToCsv(){
-  const rows = [['IMEI','Product','Status','Purchase Date','Sale Date','Customer','Customer Phone']];
+  const rows = [['IMEI/SL No.','Product','Status','Purchase Date','Sale Date','Customer','Customer Phone']];
   (state.imeiUnits||[]).forEach(u=> rows.push([u.imei,u.productName||'',u.status,u.purchaseDate||'',u.saleDate||'',u.customer||'',u.customerPhone||'']));
   return rows.map(r=> r.map(v=> `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
 }
@@ -2144,10 +2164,14 @@ function purchaseItemRow(it,i){
   ${showHsnField ? `<div class="field" style="margin:2px 0 8px 0;"><label>HSN/SAC Code for new product (optional)</label><input type="text" class="pu-hsn" data-i="${i}" value="${esc(it.hsn||'')}" placeholder="e.g. 85171200"></div>` : ''}
   ${needsImei ? `
   <div class="imei-box" style="${countOk?'border-color:#bcd8c4;background:var(--good-bg);':''}">
-    <label>IMEI / Serial numbers for this line <span style="color:var(--bad);">*</span> — one per line, exactly ${qty} required</label>
+    <label>IMEI/SL No. for this line <span style="color:var(--bad);">*</span> — one per line, exactly ${qty} required</label>
     <textarea class="pu-imei" data-i="${i}" rows="3" placeholder="e.g.\n356789012345671\n356789012345672">${esc(it.imeiText)}</textarea>
-    <div class="imei-hint" style="${qty>0 && !countOk?'color:var(--bad);font-weight:600;':''}">${qty>0 ? `${imeiCount} of ${qty} entered${countOk?' — matched':''}` : 'Set a quantity first'} · This product is set to track IMEI/serial numbers.</div>
-  </div>` : (it.productId ? `<div class="imei-hint" style="margin:-4px 0 12px 0;">This product isn't set to track IMEI/serial numbers — nothing extra needed here.</div>` : '')}`;
+    <div class="imei-hint" style="${qty>0 && !countOk?'color:var(--bad);font-weight:600;':''}">${qty>0 ? `${imeiCount} of ${qty} entered${countOk?' — matched':''}` : 'Set a quantity first'} · This product is set to track IMEI/SL No.s.</div>
+  </div>` : (it.productId ? `<div class="imei-box">
+    <label>IMEI/SL No. (optional) — one per line, up to ${qty}</label>
+    <textarea class="pu-imei" data-i="${i}" rows="2" placeholder="Optional — leave empty if not needed">${esc(it.imeiText)}</textarea>
+    <div class="imei-hint" style="${imeiCount>qty?'color:var(--bad);font-weight:600;':''}">${imeiCount} of ${qty} entered · Not required for this product.</div>
+  </div>` : '')}`;
 }
 
 /* =========================================================
@@ -2222,30 +2246,22 @@ function saleItemRow(it,i){
       const marginTotal = marginEach * qty;
       costHint = `<div class="imei-hint" style="margin:-4px 0 8px 0;">Cost price: <strong class="num">${money(cost)}</strong> / unit &nbsp;·&nbsp; Est. margin: <strong class="num" style="color:${marginTotal>=0?'var(--good)':'var(--bad)'}">${money(marginTotal)}</strong></div>`;
     }
-    if(tracksImei(prod)){
-      const availUnits = imeiUnitsForProduct(it.productId,'in_stock');
-      const usedElsewhere = new Set();
-      saleItems.forEach((otherIt,oi)=>{
-        if(oi===i) return;
-        (otherIt.imeiUnitIds||[]).forEach(id=>{ if(id) usedElsewhere.add(id); });
-      });
-      let shortageWarning = '';
-      if(availUnits.length < qty){
-        shortageWarning = `<div class="imei-hint" style="color:var(--bad); font-weight:600; margin:4px 0 8px 0;">Only ${availUnits.length} tracked IMEI unit${availUnits.length===1?'':'s'} in stock for this product — need ${qty}. Add the missing unit(s) via IMEI Tracking → “+ Add IMEI” (or the product's own IMEI/Serial field), or lower the quantity.</div>`;
-      }
-      const rows = it.imeiUnitIds.map((val, ui)=>{
-        const usedInThisItem = new Set(it.imeiUnitIds.filter((v,vi)=> vi!==ui && v));
-        const opts = availUnits
-          .filter(u=> u.id===val || (!usedElsewhere.has(u.id) && !usedInThisItem.has(u.id)))
-          .map(u=>`<option value="${u.id}" ${val===u.id?'selected':''}>${esc(u.imei)}</option>`).join('');
-        return `<select class="sa-imei" data-i="${i}" data-u="${ui}" required><option value="">Select IMEI${qty>1?` — unit ${ui+1}`:''}…</option>${opts}</select>`;
-      }).join('');
-      imeiSection = `${shortageWarning}<div class="imei-box">
-        <label>IMEI / Serial <span style="color:var(--bad);">*</span> — required, one per unit sold</label>
-        <div style="display:flex; flex-direction:column; gap:6px;">${rows}</div>
+    {
+      const tracked = tracksImei(prod);
+      if(!Array.isArray(it.manualImeis)) it.manualImeis = [];
+      while(it.manualImeis.length < qty) it.manualImeis.push('');
+      if(it.manualImeis.length > qty) it.manualImeis.length = qty;
+      const availFree = imeiUnitsForProduct(it.productId,'in_stock');
+      const listId = `sa-imei-list-${i}`;
+      const stockNow = Number(prod.stock)||0;
+      const negWarn = qty > stockNow
+        ? `<div class="imei-hint" style="color:#a56a00; font-weight:600; margin:4px 0 8px 0;">Stock is ${stockNow} — this bill will take it to ${stockNow-qty} (negative billing allowed).</div>` : '';
+      const manualRows = it.manualImeis.map((val,ui)=>`<input type="text" class="sa-manual" data-i="${i}" data-u="${ui}" list="${listId}" value="${esc(val)}" placeholder="Type IMEI/SL No.${qty>1?` — unit ${ui+1}`:''}${tracked?'':' (optional)'}" autocomplete="off" ${tracked?'required':''}>`).join('');
+      imeiSection = `${negWarn}<div class="imei-box">
+        <label>IMEI/SL No. ${tracked?'<span style="color:var(--bad);">*</span> — required, type one per unit sold':'(optional)'} · type it, or pick one from stock</label>
+        <div style="display:flex; flex-direction:column; gap:6px;">${manualRows}</div>
+        <datalist id="${listId}">${availFree.map(u=>`<option value="${esc(u.imei)}">`).join('')}</datalist>
       </div>`;
-    }else{
-      imeiSection = `<div class="imei-hint" style="margin:-4px 0 8px 0;">This product isn't set to track IMEI/serial numbers — just set quantity and price.</div>`;
     }
   }
   const noMatchHint = (it.query||'').trim() && !it.productId
@@ -2753,17 +2769,7 @@ function doSaveEditedSale(){
   const discount = Number(document.getElementById('es-discount').value) || 0;
   const paymentMode = document.getElementById('es-mode').value;
 
-  // First clear any stale IMEI sold flags attached to the original sale so they don't
-  // keep counting as in-stock after the bill is edited.
-  (s.items||[]).forEach(it=>{ (it.imeiUnitIds||[]).forEach(id=>{
-    const unit = (state.imeiUnits||[]).find(u=>u.id===id);
-    if(!unit) return;
-    unit.status = 'in_stock';
-    unit.saleId = null;
-    unit.saleDate = null;
-    unit.customer = '';
-    unit.customerPhone = '';
-  }); });
+  const origItems = s.items.map(it=>({ productId: it.productId, imeiUnitIds: [...(it.imeiUnitIds||[])] }));
 
   // Return the original items' stock first, so validation below sees true availability
   s.items.forEach(it=>{ const prod = productById(it.productId); if(prod) prod.stock = Number(prod.stock) + it.qty; });
@@ -2776,7 +2782,6 @@ function doSaveEditedSale(){
     if(!it.productId || qty<=0) return;
     const prod = productById(it.productId);
     if(!prod) return;
-    if(qty > Number(prod.stock)){ error = `Not enough stock for "${prod.name}" (available: ${prod.stock}).`; return; }
     items.push({ productId: it.productId, name: prod.name, qty, price, imeiUnitIds: [] });
   });
 
@@ -2798,6 +2803,19 @@ function doSaveEditedSale(){
   s.customerPhone = customerPhone;
   s.customerAddress = customerAddress;
   s.date = date;
+  // Release the old IMEI/SL No. links, then re-attach them to matching lines (same product & qty).
+  origItems.forEach(o=>(o.imeiUnitIds||[]).forEach(id=>{
+    const unit = (state.imeiUnits||[]).find(u=>u.id===id);
+    if(unit){ unit.status='in_stock'; unit.saleId=null; unit.saleDate=null; unit.customer=''; unit.customerPhone=''; }
+  }));
+  const claimed = new Set();
+  items.forEach(it=>{
+    const idx = origItems.findIndex((o,oi)=> !claimed.has(oi) && o.productId===it.productId && o.imeiUnitIds.length===it.qty);
+    if(idx<0) return;
+    claimed.add(idx);
+    it.imeiUnitIds = [...origItems[idx].imeiUnitIds];
+    it.imeiUnitIds.forEach(id=> markImeiUnitSold(id, s.id, date, customer, customerPhone));
+  });
   s.items = items;
   s.subtotal = subtotal;
   s.discount = discount;
@@ -2829,13 +2847,13 @@ function doDeletePurchase(purchaseId){
   const units = (state.imeiUnits||[]).filter(u=>u.purchaseId===purchaseId);
   const soldUnits = units.filter(u=>u.status==='sold');
   if(soldUnits.length>0){
-    alert(`Cannot delete purchase ${p.invoiceNo}: ${soldUnits.length} of its unit(s) have already been sold (e.g. IMEI ${soldUnits[0].imei}). Delete or revert the related sale bill(s) first.`);
+    alert(`Cannot delete purchase ${p.invoiceNo}: ${soldUnits.length} of its unit(s) have already been sold (e.g. IMEI/SL No. ${soldUnits[0].imei}). Delete or revert the related sale bill(s) first.`);
     return;
   }
-  if(!confirm(`Delete purchase ${p.invoiceNo}? This will remove ${p.items.length} item line(s), reduce stock accordingly, and delete ${units.length} IMEI/serial record(s). This cannot be undone.`)) return;
+  if(!confirm(`Delete purchase ${p.invoiceNo}? This will remove ${p.items.length} item line(s), reduce stock accordingly, and delete ${units.length} IMEI/SL No. record(s). This cannot be undone.`)) return;
   p.items.forEach(it=>{
     const prod = productById(it.productId);
-    if(prod) prod.stock = Math.max(0, Number(prod.stock||0) - it.qty);
+    if(prod){ const v = Number(prod.stock||0) - it.qty; prod.stock = v; }
   });
   state.imeiUnits = (state.imeiUnits||[]).filter(u=>u.purchaseId!==purchaseId);
   state.purchases = state.purchases.filter(x=>x.id!==purchaseId);
@@ -2919,10 +2937,14 @@ function editPurchaseItemRow(it,i){
   ${showHsnField ? `<div class="field" style="margin:2px 0 8px 0;"><label>HSN/SAC Code for new product (optional)</label><input type="text" class="ep-hsn" data-i="${i}" value="${esc(it.hsn||'')}" placeholder="e.g. 85171200"></div>` : ''}
   ${needsImei ? `
   <div class="imei-box" style="${countOk?'border-color:#bcd8c4;background:var(--good-bg);':''}">
-    <label>IMEI / Serial numbers for this line <span style="color:var(--bad);">*</span> — one per line, exactly ${qty} required</label>
+    <label>IMEI/SL No. for this line <span style="color:var(--bad);">*</span> — one per line, exactly ${qty} required</label>
     <textarea class="pu-imei ep-imei" data-i="${i}" rows="3" placeholder="e.g.\n356789012345671\n356789012345672">${esc(it.imeiText)}</textarea>
-    <div class="imei-hint" style="${qty>0 && !countOk?'color:var(--bad);font-weight:600;':''}">${qty>0 ? `${imeiCount} of ${qty} entered${countOk?' — matched':''}` : 'Set a quantity first'} · This product is set to track IMEI/serial numbers.</div>
-  </div>` : (it.productId ? `<div class="imei-hint" style="margin:-4px 0 12px 0;">This product isn't set to track IMEI/serial numbers — nothing extra needed here.</div>` : '')}`;
+    <div class="imei-hint" style="${qty>0 && !countOk?'color:var(--bad);font-weight:600;':''}">${qty>0 ? `${imeiCount} of ${qty} entered${countOk?' — matched':''}` : 'Set a quantity first'} · This product is set to track IMEI/SL No.s.</div>
+  </div>` : (it.productId ? `<div class="imei-box">
+    <label>IMEI/SL No. (optional) — one per line, up to ${qty}</label>
+    <textarea class="pu-imei ep-imei" data-i="${i}" rows="2" placeholder="Optional — leave empty if not needed">${esc(it.imeiText)}</textarea>
+    <div class="imei-hint" style="${imeiCount>qty?'color:var(--bad);font-weight:600;':''}">${imeiCount} of ${qty} entered · Not required for this product.</div>
+  </div>` : '')}`;
 }
 function editPurchaseModalHtml(p){
   const subtotal = editPurchaseItems.reduce((a,it)=> a + (Number(it.qty)||0)*(Number(it.price)||0), 0);
@@ -2968,7 +2990,7 @@ function doSaveEditedPurchase(){
   // Remove the old purchase's stock and IMEI records before re-adding the edited set.
   p.items.forEach(it=>{
     const prod = productById(it.productId);
-    if(prod) prod.stock = Math.max(0, Number(prod.stock||0) - (Number(it.qty)||0));
+    if(prod){ const v = Number(prod.stock||0) - (Number(it.qty)||0); prod.stock = v; }
   });
   state.imeiUnits = (state.imeiUnits||[]).filter(u => u.purchaseId !== p.id);
 
@@ -2988,17 +3010,28 @@ function doSaveEditedPurchase(){
     prod.name = prod.name || (it.name||'');
     prod.purchasePrice = Number(it.price)||0;
     prod.stock = Number(prod.stock||0) + qty;
+    if(!tracksImei(prod)){
+      const optList = parseImeiLines(it.imeiText);
+      if(optList.length > qty){ alert(`You entered ${optList.length} IMEI/SL No. for \"${prod.name}\" but quantity is only ${qty}.`); return; }
+      for(const imei of optList){
+        const key = imei.toLowerCase();
+        if(seenInThisEdit.has(key)){ alert(`Duplicate IMEI/SL No. \"${imei}\" entered more than once in this purchase edit.`); return; }
+        seenInThisEdit.add(key);
+        if(imeiTakenForPurchase(key, productId, p.id)){ alert(`IMEI/SL No. \"${imei}\" already exists in IMEI/SL No. Tracking. Each unit must be unique.`); return; }
+      }
+      addImeiUnitsFromPurchase(productId, prod.name, optList.join('\n'), p.id, date);
+    }
     if(tracksImei(prod)){
       const imeis = parseImeiLines(it.imeiText);
       if(imeis.length !== qty){
-        alert(`Enter exactly ${qty} IMEI/serial number${qty===1?'':'s'} for "${prod.name}" before saving.`);
+        alert(`Enter exactly ${qty} IMEI/SL No. for "${prod.name}" before saving.`);
         return;
       }
       for(const imei of imeis){
         const key = imei.toLowerCase();
-        if(seenInThisEdit.has(key)){ alert(`Duplicate IMEI "${imei}" entered more than once in this purchase edit.`); return; }
+        if(seenInThisEdit.has(key)){ alert(`Duplicate IMEI/SL No. "${imei}" entered more than once in this purchase edit.`); return; }
         seenInThisEdit.add(key);
-        if((state.imeiUnits||[]).some(u=>u.imei.toLowerCase()===key && u.purchaseId!==p.id)){ alert(`IMEI "${imei}" already exists in IMEI Tracking. Each unit must be unique.`); return; }
+        if(imeiTakenForPurchase(key, productId, p.id)){ alert(`IMEI/SL No. "${imei}" already exists in IMEI/SL No. Tracking. Each unit must be unique.`); return; }
       }
       addImeiUnitsFromPurchase(productId, prod.name, imeis.join('\n'), p.id, date);
     }
@@ -3043,7 +3076,7 @@ function plainInvoiceHtml(s, c){
     <table>
       <thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Amount</th></tr></thead>
       <tbody>
-        ${s.items.map(it=>`<tr><td>${esc(it.name)}${(it.imeiUnitIds&&it.imeiUnitIds.length)?`<div style="font-size:10.5px;color:#666;font-style:italic;">IMEI: ${it.imeiUnitIds.map(id=>{const u=(state.imeiUnits||[]).find(x=>x.id===id); return u?esc(u.imei):'';}).filter(Boolean).join(', ')}</div>`:''}</td><td style="text-align:right;">${it.qty}</td><td style="text-align:right;">${money(it.price)}</td><td style="text-align:right;">${money(it.qty*it.price)}</td></tr>`).join('')}
+        ${s.items.map(it=>`<tr><td>${esc(it.name)}${(it.imeiUnitIds&&it.imeiUnitIds.length)?`<div style="font-size:10.5px;color:#666;font-style:italic;">IMEI/SL No.: ${it.imeiUnitIds.map(id=>{const u=(state.imeiUnits||[]).find(x=>x.id===id); return u?esc(u.imei):'';}).filter(Boolean).join(', ')}</div>`:''}</td><td style="text-align:right;">${it.qty}</td><td style="text-align:right;">${money(it.price)}</td><td style="text-align:right;">${money(it.qty*it.price)}</td></tr>`).join('')}
       </tbody>
     </table>
     <div class="totals">
@@ -3077,7 +3110,7 @@ function gstInvoiceHtml(s, c){
     const desc = [esc(it.name)];
     if(it.imeiUnitIds && it.imeiUnitIds.length){
       const imeis = it.imeiUnitIds.map(id=>{const u=(state.imeiUnits||[]).find(x=>x.id===id); return u?u.imei:'';}).filter(Boolean);
-      if(imeis.length) desc.push(`<span class="desc-code">IMEI: ${esc(imeis.join(', '))}</span>`);
+      if(imeis.length) desc.push(`<span class="desc-code">IMEI/SL No.: ${esc(imeis.join(', '))}</span>`);
     } else if(prod && prod.imei) desc.push(`<span class="desc-code">${esc(prod.imei)}</span>`);
     return { hsn, row: `<tr>
         <td class="center">${i+1}</td>
@@ -3304,7 +3337,7 @@ function attachHandlers(){
     }
   }));
 
-  // IMEI Tracking
+  // IMEI/SL No. Tracking
   const imeiSearchInp = main.querySelector('#imei-search');
   if(imeiSearchInp) imeiSearchInp.addEventListener('input', e=>{ imeiSearch = e.target.value; render(); });
   main.querySelectorAll('[data-action="imei-filter"]').forEach(b=>b.addEventListener('click', ()=>{ imeiStatusFilter = b.dataset.status; render(); }));
@@ -3315,7 +3348,7 @@ function attachHandlers(){
     if(u) openModal(imeiFormModal(u));
   }));
   main.querySelectorAll('[data-action="del-imei"]').forEach(b=>b.addEventListener('click', ()=>{
-    if(confirm('Delete this IMEI record? This cannot be undone.')){
+    if(confirm('Delete this IMEI/SL No. record? This cannot be undone.')){
       state.imeiUnits = state.imeiUnits.filter(u=>u.id!==b.dataset.id);
       saveState(); render();
     }
@@ -3383,7 +3416,7 @@ function attachHandlers(){
   // Sales
   const saAddRow = main.querySelector('[data-action="sa-add-row"]');
   if(saAddRow) saAddRow.addEventListener('click', ()=>{
-    saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],query:''});
+    saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],manualImeis:[],query:''});
     const i = saleItems.length - 1;
     render();
     const product = document.querySelector(`.sa-product[data-i="${i}"]`);
@@ -3391,7 +3424,7 @@ function attachHandlers(){
   });
   main.querySelectorAll('[data-action="sa-rm-row"]').forEach(b=>b.addEventListener('click', ()=>{
     saleItems.splice(Number(b.dataset.i),1);
-    if(saleItems.length===0) saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],query:''});
+    if(saleItems.length===0) saleItems.push({productId:'',qty:1,price:0,imeiUnitIds:[],manualImeis:[],query:''});
     render();
   }));
   main.querySelectorAll('.sa-product').forEach(inp=>{
@@ -3406,7 +3439,7 @@ function attachHandlers(){
       }else{
         saleItems[i].productId = '';
       }
-      saleItems[i].imeiUnitIds = [];
+      saleItems[i].imeiUnitIds = []; saleItems[i].manualImeis = [];
     });
     inp.addEventListener('change', ()=> render());
   });
@@ -3414,6 +3447,11 @@ function attachHandlers(){
   main.querySelectorAll('.sa-qty').forEach(inp=>inp.addEventListener('change', ()=> render()));
   main.querySelectorAll('.sa-price').forEach(inp=>inp.addEventListener('input', e=>{ saleItems[Number(e.target.dataset.i)].price = e.target.value; syncSaleTotalsOnly(); }));
   main.querySelectorAll('.sa-price').forEach(inp=>inp.addEventListener('change', ()=> render()));
+  main.querySelectorAll('.sa-manual').forEach(inp=>inp.addEventListener('input', e=>{
+    const i = Number(e.target.dataset.i), u = Number(e.target.dataset.u);
+    if(!Array.isArray(saleItems[i].manualImeis)) saleItems[i].manualImeis = [];
+    saleItems[i].manualImeis[u] = e.target.value;
+  }));
   main.querySelectorAll('.sa-imei').forEach(sel=>sel.addEventListener('change', e=>{
     const i = Number(e.target.dataset.i), u = Number(e.target.dataset.u);
     if(!Array.isArray(saleItems[i].imeiUnitIds)) saleItems[i].imeiUnitIds = [];
@@ -3546,24 +3584,34 @@ function doSavePurchase(){
   const invoiceNo = document.getElementById('pu-invno').value.trim() || nextPurchaseNo();
   const paid = Number(document.getElementById('pu-paid').value) || 0;
 
-  // Validate IMEI/serial entry up front for products that track it — mandatory,
+  // Validate IMEI/SL No. entry up front for products that track it — mandatory,
   // exact count, no duplicates. Products with tracking off skip this entirely.
   const seenInThisPurchase = new Set();
   for(const it of purchaseItems){
     const qty = Number(it.qty)||0;
     if(qty<=0) continue;
-    if(!tracksImei(it.productId || null)) continue;
     const label = it.name.trim() || (it.productId ? productById(it.productId).name : 'this item');
     const list = parseImeiLines(it.imeiText);
+    if(!tracksImei(it.productId || null)){
+      // Optional for non-tracked products: any number from 0 up to qty, still unique.
+      if(list.length > qty){ alert(`You entered ${list.length} IMEI/SL No. for \"${label}\" but quantity is only ${qty}.`); return; }
+      for(const imei of list){
+        const key = imei.toLowerCase();
+        if(seenInThisPurchase.has(key)){ alert(`Duplicate IMEI/SL No. \"${imei}\" entered more than once in this purchase.`); return; }
+        seenInThisPurchase.add(key);
+        if(imeiTakenForPurchase(key, it.productId)){ alert(`IMEI/SL No. \"${imei}\" already exists in IMEI/SL No. Tracking. Each unit must be unique.`); return; }
+      }
+      continue;
+    }
     if(list.length !== qty){
-      alert(`Enter exactly ${qty} IMEI/serial number${qty===1?'':'s'} for "${label}" (currently ${list.length}).`);
+      alert(`Enter exactly ${qty} IMEI/SL No. for "${label}" (currently ${list.length}).`);
       return;
     }
     for(const imei of list){
       const key = imei.toLowerCase();
-      if(seenInThisPurchase.has(key)){ alert(`Duplicate IMEI "${imei}" entered more than once in this purchase.`); return; }
+      if(seenInThisPurchase.has(key)){ alert(`Duplicate IMEI/SL No. "${imei}" entered more than once in this purchase.`); return; }
       seenInThisPurchase.add(key);
-      if((state.imeiUnits||[]).some(u=>u.imei.toLowerCase()===key)){ alert(`IMEI "${imei}" already exists in IMEI Tracking. Each unit must be unique.`); return; }
+      if(imeiTakenForPurchase(key, it.productId)){ alert(`IMEI/SL No. "${imei}" already exists in IMEI/SL No. Tracking. Each unit must be unique.`); return; }
     }
   }
 
@@ -3585,9 +3633,9 @@ function doSavePurchase(){
     prod.stock = Number(prod.stock||0) + qty;
     prod.purchasePrice = price;
     items.push({ productId, name: prod.name, qty, price });
-    if(tracksImei(prod)) addImeiUnitsFromPurchase(productId, prod.name, it.imeiText, purchaseId, date);
+    addImeiUnitsFromPurchase(productId, prod.name, it.imeiText, purchaseId, date); // tracked: mandatory (validated above); non-tracked: optional
   });
-  if(items.length===0){ alert('Add at least one item with quantity (and IMEI/serial numbers, for products that track them).'); return; }
+  if(items.length===0){ alert('Add at least one item with quantity (and IMEI/SL No.s, for products that track them).'); return; }
   const total = items.reduce((a,it)=>a+it.qty*it.price,0);
   state.purchases.push({ id: purchaseId, date, invoiceNo, supplier, items, total, paid, due: total-paid });
   state.counters.purchase += 1;
@@ -3617,26 +3665,37 @@ function doSaveSale(){
   const items = [];
   let error = '';
   const seenIdsAcrossSale = new Set();
+  const seenManualAcrossSale = new Set();
   saleItems.forEach(it=>{
     const qty = Number(it.qty)||0;
     const price = Number(it.price)||0;
     if(!it.productId || qty<=0) return;
     const prod = productById(it.productId);
     if(!prod){ return; }
-    if(qty > Number(prod.stock)){ error = `Not enough stock for "${prod.name}" (available: ${prod.stock}).`; return; }
+    // Negative billing is allowed for every product (stock may go below zero).
     let ids = [];
-    if(tracksImei(prod)){
-      ids = (it.imeiUnitIds||[]).filter(Boolean);
-      if(ids.length !== qty){ error = `Select an IMEI/serial for every unit of "${prod.name}" (${ids.length} of ${qty} selected).`; return; }
-      for(const id of ids){
-        if(seenIdsAcrossSale.has(id)){ error = `The same IMEI unit was selected twice for "${prod.name}".`; return; }
-        seenIdsAcrossSale.add(id);
+    let pending = [];
+    {
+      const typedList = (it.manualImeis||[]).map(v=>String(v||'').trim()).filter(Boolean).slice(0, qty);
+      if(tracksImei(prod) && typedList.length !== qty){ error = `Type an IMEI/SL No. for every unit of "${prod.name}" (${typedList.length} of ${qty} entered).`; return; }
+      for(const imei of typedList){
+        const key = imei.toLowerCase();
+        if(seenManualAcrossSale.has(key)){ error = `IMEI/SL No. "${imei}" is entered more than once on this bill.`; return; }
+        seenManualAcrossSale.add(key);
+        const existingUnit = (state.imeiUnits||[]).find(u=>u.imei.toLowerCase()===key);
+        if(existingUnit){
+          if(existingUnit.productId!==prod.id){ error = `IMEI/SL No. "${imei}" belongs to another product (${existingUnit.productName||'unknown'}).`; return; }
+          if(existingUnit.status==='sold'){ error = `IMEI/SL No. "${imei}" is already sold${existingUnit.customer?' to '+existingUnit.customer:''}.`; return; }
+          ids.push(existingUnit.id);
+        }else{
+          pending.push(imei);
+        }
       }
     }
-    items.push({ productId: it.productId, name: prod.name, qty, price, imeiUnitIds: ids });
+    items.push({ productId: it.productId, name: prod.name, qty, price, imeiUnitIds: ids, _pending: pending });
   });
   if(error){ alert(error); return; }
-  if(items.length===0){ alert('Add at least one item to the bill (with an IMEI/serial selected, for products that track them).'); return; }
+  if(items.length===0){ alert('Add at least one item to the bill (with an IMEI/SL No. typed, for products that track them).'); return; }
 
   const subtotal = items.reduce((a,it)=>a+it.qty*it.price,0);
   const total = Math.max(subtotal - discount, 0);
@@ -3646,6 +3705,13 @@ function doSaveSale(){
   items.forEach(it=>{
     const prod = productById(it.productId);
     prod.stock = Number(prod.stock) - it.qty;
+    // Manually typed IMEI/SL No. not yet in the system: record it now so it stays traceable.
+    (it._pending||[]).forEach(imei=>{
+      const nu = { id: uid('imei'), imei, productId: prod.id, productName: prod.name, status:'in_stock', purchaseId:null, purchaseDate: date, saleId:null, saleDate:null, customer:'', customerPhone:'' };
+      state.imeiUnits.push(nu);
+      it.imeiUnitIds.push(nu.id);
+    });
+    delete it._pending;
   });
 
   const sale = { id: uid('sale'), date, invoiceNo, customer, customerPhone, customerAddress, items, subtotal, discount, total, paid, paymentMode };
@@ -3653,7 +3719,7 @@ function doSaveSale(){
   state.counters.invoice += 1;
 
   // Register/refresh this customer in the customer directory, and link any
-  // chosen IMEI units to this sale so the IMEI Tracking report stays in sync.
+  // chosen IMEI units to this sale so the IMEI/SL No. Tracking report stays in sync.
   upsertCustomerFromSale(customer, customerPhone, customerAddress);
   items.forEach(it=>{ (it.imeiUnitIds||[]).forEach(id=> markImeiUnitSold(id, sale.id, date, customer, customerPhone)); });
 
@@ -3768,19 +3834,19 @@ function attachModalHandlers(){
     const productId = document.getElementById('im-product').value;
     const date = document.getElementById('im-date').value || todayISO();
     const status = document.getElementById('im-status').value;
-    if(!imei){ alert('Enter an IMEI / serial number.'); return; }
+    if(!imei){ alert('Enter an IMEI/SL No..'); return; }
     if(!productId){ alert('Select a product.'); return; }
     const id = saveImeiBtn.dataset.id;
     const prod = productById(productId);
     if(id){
       const u = state.imeiUnits.find(x=>x.id===id);
       const dupe = state.imeiUnits.some(x=>x.id!==id && x.imei.toLowerCase()===imei.toLowerCase());
-      if(dupe){ alert('Another unit already has this IMEI.'); return; }
+      if(dupe){ alert('Another unit already has this IMEI/SL No.'); return; }
       Object.assign(u, { imei, productId, productName: prod.name, purchaseDate: date, status });
       if(status==='in_stock'){ u.saleId=null; u.saleDate=null; u.customer=''; u.customerPhone=''; }
     }else{
       const dupe = state.imeiUnits.some(x=>x.imei.toLowerCase()===imei.toLowerCase());
-      if(dupe){ alert('A unit with this IMEI already exists.'); return; }
+      if(dupe){ alert('A unit with this IMEI/SL No. already exists.'); return; }
       state.imeiUnits.push({ id: uid('imei'), imei, productId, productName: prod.name, status, purchaseId:null, purchaseDate: date, saleId:null, saleDate:null, customer:'', customerPhone:'' });
     }
     saveState(); closeModal(); render();
