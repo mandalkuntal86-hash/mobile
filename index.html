@@ -1164,6 +1164,7 @@ const ADMIN_USERNAME = 'mandalkuntal';
 const ADMIN_BOOTSTRAP_PASSWORD = 'Buku@2016';
 const SESSION_KEY = 'shopLedgerLoggedInUsername';
 let currentUser = null; // { username, role: 'admin'|'staff' }
+function sessTok(u){ let h=5381; const t=u.username+'|'+u.password; for(let i=0;i<t.length;i++) h=((h<<5)+h+t.charCodeAt(i))>>>0; return u.username+'|'+h; }
 function isAdmin(){ return !!currentUser && currentUser.role === 'admin'; }
 function seedAdminIfNeeded(){
   if(!state.users.some(u=>u.role==='admin')){
@@ -3703,7 +3704,7 @@ function attachHandlers(){
 
   // Users (admin-only)
   const addUserBtn = main.querySelector('[data-action="add-user"]');
-  if(addUserBtn) addUserBtn.addEventListener('click', ()=> openModal(userFormModal()));
+  if(addUserBtn) addUserBtn.addEventListener('click', ()=>{ if(!isAdmin()) return; openModal(userFormModal()); });
   main.querySelectorAll('[data-action="del-user"]').forEach(b=>b.addEventListener('click', ()=> doRemoveUser(b.dataset.username)));
 
   // Ledger
@@ -4231,6 +4232,7 @@ function attachModalHandlers(){
   // Add-user modal (admin-only) — stored directly in state.users, no external auth service needed.
   const saveUserBtn = root.querySelector('[data-action="save-user"]');
   if(saveUserBtn) saveUserBtn.addEventListener('click', ()=>{
+    if(!isAdmin()){ alert('Only an admin can add users.'); return; }
     const errBox = document.getElementById('user-form-error');
     const showErr = m=>{ errBox.textContent = m; errBox.style.display = 'block'; };
     const username = document.getElementById('u-username').value.trim();
@@ -4291,7 +4293,7 @@ function attachModalHandlers(){
 
   function signInAs(rec){
     currentUser = { username: rec.username, role: rec.role };
-    localStorage.setItem(SESSION_KEY, rec.username);
+    localStorage.setItem(SESSION_KEY, sessTok(rec));
     loginScreen.style.display = 'none';
     appRoot.style.display = 'flex';
     if(typeof closeMobileSidebar==='function') closeMobileSidebar();
@@ -4332,7 +4334,7 @@ function attachModalHandlers(){
     }
     seedAdminIfNeeded();
     const savedUsername = localStorage.getItem(SESSION_KEY);
-    const rec = savedUsername ? state.users.find(u=>u.username===savedUsername) : null;
+    const rec = savedUsername ? state.users.find(u=>sessTok(u)===savedUsername) : null;
     if(rec){
       signInAs(rec);
     }else{
