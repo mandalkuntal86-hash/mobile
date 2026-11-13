@@ -249,7 +249,7 @@
   #gst-invoice .gi-words .lbl{ font-size:10px; color:#444; }
   #gst-invoice .gi-bottom{ display:flex; border:1px solid #000; border-top:none; }
   #gst-invoice .gi-bottom .qr-col{ width:34%; padding:10px; border-right:1px solid #000; font-size:10.5px; }
-  #gst-invoke .qr-box{ width:80px; height:80px; }
+  #gst-invoice .qr-box{ width:80px; height:80px; }
   #gst-invoice .gi-bottom .bank-col{ flex:1; padding:10px; display:flex; flex-direction:column; justify-content:space-between; }
   #gst-invoice .gi-bottom .bank-details{ font-size:11px; line-height:1.7; }
   #gst-invoice .gi-sign{ text-align:right; font-size:11px; margin-top:24px; }
@@ -1064,6 +1064,24 @@ tr:hover td{ background:#f8fbff; box-shadow:none; }
   .kpi:active,.quick-card:active,.company-row:active,.gw-item:active{ transform:scale(.98); }
 }
 /* ================= END MODERN POLISH ================= */
+
+/* ================= PRINT FIX (saved bill / statement) - keep LAST so it wins ================= */
+@media print{
+  html,body{ height:auto !important; min-height:0 !important; overflow:visible !important; background:#fff !important; margin:0 !important; padding:0 !important; }
+  body > *:not(#modal-root){ display:none !important; }
+  body *{ visibility:visible !important; }
+  #modal-root{ display:block !important; position:static !important; }
+  #modal-root .modal-bg{ position:static !important; display:block !important; background:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; padding:0 !important; margin:0 !important; overflow:visible !important; height:auto !important; min-height:0 !important; width:auto !important; }
+  #modal-root .modal, #modal-root .modal.wide{ position:static !important; display:block !important; animation:none !important; transform:none !important; box-shadow:none !important; border:0 !important; border-radius:0 !important; padding:0 !important; margin:0 !important; width:100% !important; max-width:100% !important; max-height:none !important; height:auto !important; overflow:visible !important; background:#fff !important; }
+  #modal-root .no-print, #modal-root .modal-head{ display:none !important; }
+  #invoice-paper, #gst-invoice{ position:static !important; width:100% !important; max-width:100% !important; margin:0 auto !important; border-radius:0 !important; box-shadow:none !important; overflow:visible !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  #invoice-paper{ border:0 !important; padding:6mm !important; }
+  #gst-invoice{ border:1px solid #000 !important; }
+  #invoice-paper table, #gst-invoice table{ width:100%; page-break-inside:auto; }
+  #invoice-paper tr, #gst-invoice tr, #gst-invoice .gi-bottom{ page-break-inside:avoid; break-inside:avoid; }
+  #invoice-paper thead, #gst-invoice thead{ display:table-header-group; }
+  @page{ size:A4; margin:10mm; }
+}
 </style>
 </head>
 
@@ -2382,7 +2400,7 @@ function viewSales(){
   if(!saleCustomerDraft.date) saleCustomerDraft.date = todayISO();
   if(!saleCustomerDraft.invoiceNo) saleCustomerDraft.invoiceNo = nextInvoiceNo();
   if(!saleCustomerDraft.mode) saleCustomerDraft.mode = 'Cash';
-  const recent = [...state.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo)).slice(0,10);
+  const recent = [...state.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo));
   const subtotal = saleItems.reduce((a,it)=> a + (Number(it.qty)||0)*(Number(it.price)||0), 0);
   return `
     <div class="pagehead"><div><h1>Billing / Sale</h1><div class="desc">Create a new customer bill</div></div></div>
@@ -2416,14 +2434,15 @@ function viewSales(){
       <button class="btn primary" data-action="save-sale">Generate Bill</button>
     </div>
     <div class="card">
-      <h2>Recent Bills</h2>
+      <h2>Saved Bills (${recent.length})</h2>
+      ${recent.length>0?`<input type="text" id="sb-search" placeholder="Search by invoice no., customer or date..." autocomplete="off" style="margin-bottom:10px;" oninput="var q=this.value.toLowerCase().trim();document.querySelectorAll('#saved-bills-body tr').forEach(function(r){r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)>-1)?'':'none';});">`:''}
       ${recent.length===0? emptyState('No bills yet','Bills you create will be listed here.') : `
-      <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody>
+      <div style="max-height:70vh;overflow:auto;"><table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody id="saved-bills-body">
       ${recent.map(s=>`<tr><td>${fmtDate(s.date)}</td><td class="num">${s.invoiceNo}</td><td>${esc(s.customer||'Walk-in')}</td><td class="num">${money(s.total)}</td><td class="num">${money(s.paid)}</td><td>${dueStatusPill(effectiveSaleDue(s))}</td><td style="text-align:right; white-space:nowrap;">
         <button class="btn sm ghost" data-action="print-sale" data-id="${s.id}">Print</button>
         ${isAdmin() ? ` <button class="btn sm ghost" data-action="edit-sale" data-id="${s.id}">Edit</button> <button class="btn sm danger" data-action="del-sale" data-id="${s.id}">Delete</button>` : ''}
       </td></tr>`).join('')}
-      </tbody></table>`}
+      </tbody></table></div>`}
     </div>
   `;
 }
