@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Billzen — Mobile Shop Billing</title>
-<meta name="theme-color" content="#174f8b">
+<meta name="theme-color" content="#0b1b3a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Billzen">
@@ -1065,6 +1065,180 @@ tr:hover td{ background:#f8fbff; box-shadow:none; }
 }
 /* ================= END MODERN POLISH ================= */
 
+
+/* ================= PROFESSIONAL THEME LAYER ================= */
+body{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; background:#f3f6fb; }
+#main .pagehead h1, #main .card > h2, #main .card h3, .login-card h1, .login-visual h2, .modal-head h2, .hero-panel h1{
+  font-family:'Inter',system-ui,sans-serif; letter-spacing:-.02em; font-weight:700; }
+#main .pagehead h1{ font-size:26px; }
+#main .card{ border-radius:14px; border:1px solid #e4eaf4; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 28px rgba(15,23,42,.05); }
+#main .kpi{ border-radius:14px; border:1px solid #e4eaf4; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 28px rgba(15,23,42,.05); }
+#main .kpi .label{ font-size:11px; letter-spacing:.08em; color:#64748b; }
+#main .kpi .value{ font-size:26px; letter-spacing:-.02em; }
+#main > *{ animation:bzIn .28s ease both; }
+@keyframes bzIn{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
+@media (prefers-reduced-motion:reduce){ #main > *{ animation:none; } }
+table{ font-variant-numeric:tabular-nums; }
+th{ font-size:11px; letter-spacing:.07em; color:#64748b; }
+tr:hover td{ background:#f6f9ff; }
+.pill{ font-size:11px; font-weight:600; letter-spacing:.02em; padding:3px 10px; }
+.pill.info{ background:#e0f2fe; color:#0369a1; }
+.mono-chip{ display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:12px; padding:3px 9px; border-radius:8px; background:#eef2f9; color:#1e293b; border:1px solid #e1e8f3; }
+.kpi-cap{ font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:6px; }
+.co-id-card{ display:flex; align-items:center; gap:22px; flex-wrap:wrap; background:linear-gradient(135deg,#f5f9ff,#eef6ff) !important; border-color:#d6e4fb !important; }
+.co-id-card .desc{ color:#475569; font-size:13px; }
+.btn{ letter-spacing:.005em; transition:background .15s, box-shadow .15s, transform .1s, border-color .15s; }
+:focus-visible{ outline:2px solid #2563eb; outline-offset:2px; }
+.eb-header .brand{ display:flex; align-items:center; gap:2px; white-space:nowrap; }
+.co-chip{ margin-left:12px; padding:3px 11px; font-size:11.5px; font-weight:600; letter-spacing:.02em; border-radius:999px; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.25); max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+#sb-user{ display:inline-flex; align-items:center; gap:8px; color:rgba(255,255,255,.9); }
+#sb-status{ font-size:11.5px; }
+body.platform-mode .commands, body.platform-mode #find, body.platform-mode #dt{ display:none !important; }
+body.platform-mode .eb-header .topline{ justify-content:space-between; }
+.navbtn.back{ color:#0e7490; font-weight:600; background:#ecfeff; margin-bottom:8px; }
+.navbtn.back:hover{ background:#cffafe; color:#155e75; }
+.modal-bg{ backdrop-filter:blur(4px); }
+.modal{ box-shadow:0 30px 80px rgba(15,23,42,.35); }
+#login-screen .login-shell{ box-shadow:0 40px 100px rgba(15,23,42,.28); }
+.login-visual h2{ font-size:2.4rem; }
+.login-brand-row .brand-pill{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:5px 12px; }
+.login-card button.login-mode{ background:none !important; border:0 !important; box-shadow:none !important; color:#2563eb; font-weight:600; font-size:13px; margin-top:12px; padding:8px; }
+.login-card button.login-mode:hover{ text-decoration:underline; transform:none; }
+.login-card .sub{ min-height:22px; }
+::selection{ background:#bfdbfe; }
+/* ================= END PROFESSIONAL THEME LAYER ================= */
+
+/* ================= PROFESSIONAL THEME v2 — enterprise look (visual only) ================= */
+@media screen{
+:root{
+  --ink:#0f172a; --ink-soft:#64748b; --line:#e4e8f0; --bg:#f4f6fa; --panel:#f8fafc;
+  --accent:#2457d6; --blue:#0b1b3a; --blue2:#2457d6; --accent-soft:#e9efff;
+  --r:12px; --r-sm:8px;
+  --sh1:0 1px 2px rgba(15,23,42,.04),0 1px 3px rgba(15,23,42,.05);
+  --sh2:0 4px 12px rgba(15,23,42,.07),0 16px 36px rgba(15,23,42,.08);
+}
+html,body{ background:var(--bg); }
+body{ font-size:14px; color:var(--ink); font-feature-settings:'cv11','ss01'; }
+
+/* ---- header ---- */
+body .eb-header{ background:#0b1b3a; box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 6px 24px rgba(11,27,58,.25); }
+body .eb-header .topline{ background:#0b1b3a; height:58px; padding:0 22px; border-bottom:1px solid rgba(255,255,255,.07); }
+body .eb-header .brand{ text-transform:none; font-size:18px; font-weight:700; letter-spacing:-.01em; min-width:0; max-width:none; overflow:visible; }
+body .eb-header .brand::before{ content:"B"; display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; margin-right:11px; border-radius:9px; font-size:15px; font-weight:800; color:#fff; background:linear-gradient(135deg,#3b82f6,#06b6d4); box-shadow:0 4px 12px rgba(59,130,246,.45); }
+body .co-chip{ margin-left:14px; font-weight:500; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); color:#dbe6ff; }
+body .eb-header .find{ height:36px; border-radius:10px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); font-size:13px; }
+body .eb-header .find:focus{ background:#fff; outline:3px solid rgba(96,165,250,.45); }
+body .top-actions{ gap:12px; }
+body .top-actions button{ border-radius:8px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); font-weight:600; font-size:12.5px; }
+body .top-actions button:hover{ background:#fff; color:#0b1b3a; }
+body #sb-status{ padding:4px 10px; border-radius:999px; background:rgba(255,255,255,.07); font-size:11.5px; font-weight:500; }
+body .commands{ height:42px; background:#fff; border-bottom:1px solid var(--line); }
+body .commands button{ font-size:12.5px; font-weight:500; color:#475569; border-radius:7px; }
+body .commands button:hover{ background:var(--accent-soft); color:var(--accent); }
+body .commands kbd{ background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:5px; font-family:'IBM Plex Mono',monospace; font-size:10px; }
+body .pagebar{ background:#fff; height:48px; border-bottom:1px solid var(--line); font-size:15px; font-weight:700; letter-spacing:-.01em; }
+
+/* ---- layout: navigation on the left ---- */
+@media (min-width:761px){
+  body #sidebar{ order:-1; border-left:0; border-right:1px solid var(--line); width:216px; padding:16px 12px; background:#fff; }
+  body.platform-mode #sidebar, body #sidebar{ box-shadow:none; }
+}
+body .navbtn{ border-radius:9px; padding:9px 12px; font-size:13.5px; font-weight:500; color:#475569; border-left:0; position:relative; }
+body .navbtn:hover{ background:#f1f4f9; color:var(--ink); }
+body .navbtn.active{ background:var(--accent-soft); color:var(--accent); font-weight:600; box-shadow:none; }
+body .navbtn.active::before{ content:""; position:absolute; left:-12px; top:8px; bottom:8px; width:3px; border-radius:0 3px 3px 0; background:var(--accent); }
+body .navbtn.back{ background:#f0fdfa; color:#0f766e; margin-bottom:10px; }
+body #main{ padding:28px 32px 56px; max-width:1280px; }
+@media (max-width:760px){ body .navbtn.active::before{ display:none; } body .navbtn.active{ background:var(--accent); color:#fff; } }
+
+/* ---- headings & cards ---- */
+body #main .pagehead{ margin-bottom:22px; align-items:center; }
+body #main .pagehead h1{ font-size:24px; font-weight:700; letter-spacing:-.025em; color:var(--ink); }
+body #main .pagehead .desc{ font-size:13.5px; color:var(--ink-soft); margin-top:3px; }
+body #main .card{ border-radius:var(--r); border:1px solid var(--line); box-shadow:var(--sh1); padding:22px; }
+body #main .card > h2, body #main .card h3{ font-size:15px; font-weight:650; letter-spacing:-.01em; }
+body .hero-panel{ background:linear-gradient(120deg,#0b1b3a 0%,#173a8a 60%,#2457d6 100%); border-radius:16px; box-shadow:0 16px 36px rgba(23,58,138,.22); }
+body .mini-stat{ background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.16); }
+
+/* ---- KPI ---- */
+body #main .kpi{ border-radius:var(--r); border:1px solid var(--line); box-shadow:var(--sh1); padding:18px 20px; }
+body #main .kpi::before{ width:3px; }
+body #main .kpi .label{ font-size:11px; font-weight:600; letter-spacing:.07em; color:#64748b; }
+body #main .kpi .value{ font-size:26px; font-weight:600; letter-spacing:-.02em; color:var(--ink); }
+body #main .kpi:hover{ transform:none; box-shadow:var(--sh2); }
+body .quick-card{ border-radius:var(--r); box-shadow:var(--sh1); }
+
+/* ---- buttons & inputs ---- */
+body .btn{ border-radius:8px; min-height:36px; padding:7px 14px; font-size:13px; font-weight:600; border:1px solid #d3d9e6; background:#fff; color:#1e293b; box-shadow:0 1px 1px rgba(15,23,42,.04); }
+body .btn:hover{ background:#f6f8fc; border-color:#b8c1d4; box-shadow:0 1px 2px rgba(15,23,42,.08); }
+body .btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 1px 2px rgba(36,87,214,.4), inset 0 1px 0 rgba(255,255,255,.18); }
+body .btn.primary:hover{ background:#1c47b8; border-color:#1c47b8; box-shadow:0 4px 12px rgba(36,87,214,.35); }
+body .btn.sm{ min-height:30px; padding:4px 10px; font-size:12px; }
+body .btn.danger{ color:#b42318; border-color:#f4c7c3; background:#fff; }
+body .btn.danger:hover{ background:#fef3f2; border-color:#e9a29c; }
+body .btn.ghost{ border-color:transparent; box-shadow:none; background:transparent; }
+body .btn.ghost:hover{ background:#eef1f7; }
+body input[type=text], body input[type=number], body input[type=tel], body input[type=date], body input[type=email], body input[type=password], body select, body textarea{
+  border:1px solid #d3d9e6; border-radius:8px; min-height:38px; font-size:13.5px; background:#fff; }
+body input:hover, body select:hover, body textarea:hover{ border-color:#b8c1d4; }
+body input:focus, body select:focus, body textarea:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(36,87,214,.16); }
+body label{ font-size:12px; font-weight:600; color:#475569; letter-spacing:.01em; }
+
+/* ---- tables ---- */
+body table{ font-size:13.5px; }
+body th{ background:#f8fafc; color:#64748b; font-size:11px; font-weight:600; letter-spacing:.07em; padding:11px 14px; border-bottom:1px solid var(--line); }
+body th:first-child{ border-top-left-radius:8px; } body th:last-child{ border-top-right-radius:8px; }
+body td{ padding:12px 14px; border-bottom:1px solid #edf0f6; }
+body tr:hover td{ background:#f8faff; }
+body .pill{ border-radius:999px; padding:3px 10px; font-size:11px; font-weight:600; }
+body .pill.good{ background:#e7f6ec; color:#166534; } body .pill.bad{ background:#fdecec; color:#b42318; }
+body .pill.neutral{ background:#eef1f6; color:#475569; } body .pill.info{ background:#e3f1fb; color:#0b6aa2; }
+body .avatar{ width:30px; height:30px; background:var(--accent-soft); color:var(--accent); font-weight:700; }
+
+/* ---- home / gateway ---- */
+body #companies{ background:#fff; border-right:1px solid var(--line); }
+body .period{ border-bottom:1px solid var(--line); height:auto; padding:20px 22px 16px; }
+body .period small{ font-size:10.5px; letter-spacing:.09em; font-weight:600; color:#64748b; }
+body .period strong{ font-size:14px; }
+body .company-head{ background:#f8fafc; color:#64748b; font-size:10.5px; font-weight:600; letter-spacing:.09em; border-bottom:1px solid var(--line); padding:9px 22px; }
+body .company-row{ padding:14px 22px; border-bottom:1px solid #edf0f6; }
+body .company-row button{ font-weight:600; font-size:14px; }
+body .gw{ border-radius:16px; border:1px solid var(--line); box-shadow:var(--sh2); }
+body .gw-title{ background:#0b1b3a; font-weight:650; letter-spacing:.01em; }
+body .gw-item{ font-size:13.5px; }
+body .gw-item.on{ background:var(--accent-soft); color:var(--accent); }
+body .gw-item.on .hk, body .gw-item .hk{ color:var(--accent); }
+
+/* ---- modals ---- */
+body .modal-bg{ background:rgba(11,27,58,.5); backdrop-filter:blur(5px); }
+body .modal{ border-radius:16px; box-shadow:0 30px 90px rgba(11,27,58,.4); }
+body .modal-head{ padding:18px 22px; }
+body .modal-head h2{ font-size:17px; font-weight:700; }
+
+/* ---- login ---- */
+body #login-screen{ background:#eef1f7; background-image:radial-gradient(circle at 12% 8%,rgba(36,87,214,.13),transparent 38%),radial-gradient(circle at 92% 92%,rgba(6,182,212,.13),transparent 38%); }
+body .login-shell{ max-width:960px; border-radius:20px; overflow:hidden; box-shadow:0 40px 100px rgba(11,27,58,.25), 0 0 0 1px rgba(15,23,42,.05); }
+body .login-visual{ background:#0b1b3a; background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(155deg,#0b1b3a 0%,#173a8a 62%,#2457d6 120%); background-size:22px 22px,100% 100%; padding:44px 38px; }
+body .login-visual h2{ font-size:2.5rem; letter-spacing:-.035em; font-weight:800; }
+body .login-badge{ background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); font-weight:600; letter-spacing:.1em; }
+body .login-features li{ background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1); font-size:13px; }
+body .login-card{ padding:48px 42px; background:#fff; }
+body .login-card h1{ font-size:1.75rem; font-weight:750; letter-spacing:-.03em; }
+body .login-card .field label{ font-size:11.5px; letter-spacing:.07em; color:#475569; }
+body .login-card .field input{ border-radius:10px; padding:12px 14px; min-height:46px; }
+body .login-card button#login-submit{ min-height:46px; border-radius:10px; font-size:14px; background:var(--accent); border-color:var(--accent); box-shadow:0 6px 16px rgba(36,87,214,.3); }
+body .login-card button#login-submit:hover{ background:#1c47b8; }
+@media (max-width:760px){ body .login-card{ padding:28px 22px; } body .login-visual{ padding:24px 20px; } }
+
+/* ---- small refinements ---- */
+body ::-webkit-scrollbar{ width:10px; height:10px; }
+body ::-webkit-scrollbar-thumb{ background:#cbd3e1; border-radius:10px; border:2px solid transparent; background-clip:padding-box; }
+body ::-webkit-scrollbar-thumb:hover{ background:#aeb8cc; background-clip:padding-box; border:2px solid transparent; }
+body .filter-tabs button.active{ background:var(--accent); border-color:var(--accent); }
+body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
+}
+/* ================= END PROFESSIONAL THEME v2 ================= */
+
 /* ================= PRINT FIX (saved bill / statement) - keep LAST so it wins ================= */
 @media print{
   html,body{ height:auto !important; min-height:0 !important; overflow:visible !important; background:#fff !important; margin:0 !important; padding:0 !important; }
@@ -1092,19 +1266,19 @@ tr:hover td{ background:#f8fbff; box-shadow:none; }
     <div class="login-visual">
       <div class="login-badge">Smart • Secure • Fast</div>
       <h2>Billzen</h2>
-      <p>Manage billing, stock, purchases, payments, and customer insights from one modern dashboard.</p>
+      <p>One secure platform for billing, stock, purchases, payments and customer insights — with a private workspace for every company.</p>
       <ul class="login-features">
-        <li>📊 Sales &amp; profit overview</li>
-        <li>📦 Stock &amp; purchase tracking</li>
-        <li>💳 Customer payment control</li>
+        <li>🏢 A separate workspace for every company</li>
+        <li>🔐 Role-based access: super admin, admin, staff</li>
+        <li>📊 Billing, stock &amp; ledgers in one place</li>
       </ul>
     </div>
     <div class="login-card">
       <div class="login-brand-row">
-        <span class="brand-pill">Eldorado</span>
+        <span class="brand-pill">Secure workspace sign-in</span>
       </div>
-      <h1>Welcome back</h1>
-      <div class="sub" id="login-status" role="status" aria-live="polite">Connecting to your shop data...</div>
+      <h1 id="login-title">Welcome back</h1>
+      <div class="sub" id="login-status" role="status" aria-live="polite">Connecting…</div>
       <div class="login-error" id="login-error"></div>
       <div style="margin-bottom:16px;"><button class="btn ghost" id="retry-db-btn" type="button" hidden>Retry Connection</button></div>
       <div class="field"><label>Username</label><input type="text" id="login-email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Enter username"></div>
@@ -1167,7 +1341,10 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
-const shopDocRef = doc(db, "shopData", "main");
+const platformRef = doc(db, "platform", "config");   // super admins + company registry
+const legacyRef = doc(db, "shopData", "main");       // old single-shop data (migrated once, kept as backup)
+const companyRef = id => doc(db, "companies", id);   // one document per company
+let dataDocRef = null;                               // the company currently open
 let fbStatus = 'connecting'; // connecting | ok | error
 let fbError = '';
 
@@ -1178,29 +1355,48 @@ let fbError = '';
    of the shop data in Firestore). The session (which username is
    signed in) is remembered in this browser via localStorage.
    ========================================================= */
-const ADMIN_USERNAME = 'mandalkuntal';
-const ADMIN_BOOTSTRAP_PASSWORD = 'Buku@2016';
-const SESSION_KEY = 'shopLedgerLoggedInUsername';
-let currentUser = null; // { username, role: 'admin'|'staff' }
-function sessTok(u){ let h=5381; const t=u.username+'|'+u.password; for(let i=0;i<t.length;i++) h=((h<<5)+h+t.charCodeAt(i))>>>0; return u.username+'|'+h; }
-function isAdmin(){ return !!currentUser && currentUser.role === 'admin'; }
-function seedAdminIfNeeded(){
-  if(!state.users.some(u=>u.role==='admin')){
-    state.users.push({ username: ADMIN_USERNAME, password: ADMIN_BOOTSTRAP_PASSWORD, role:'admin', createdAt: todayISO(), createdBy:'system' });
-    saveState();
-  }
+const ADMIN_USERNAME = 'mandalkuntal86';            // first super admin (seeded once, then change the password in the app)
+const ADMIN_BOOTSTRAP_PASSWORD = 'Tuku@2018';
+const SESSION_KEY = 'billzenSession';
+const MIN_PW = 6;
+let currentUser = null; // { username, role:'admin'|'staff', superAdmin:boolean, companyId:string|null, tok }
+let platform = { superAdmins: [], companies: [] };
+let pwUpgraded = false;
+const slugify = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30);
+function isAdmin(){ return !!currentUser && currentUser.role === 'admin' && !!currentUser.companyId; }
+function isPlatformMode(){ return !!currentUser && currentUser.superAdmin && !currentUser.companyId; }
+async function hashPw(scope, username, pw){
+  const t = `billzen|${scope}|${(username||'').trim().toLowerCase()}|${pw}`;
+  try{
+    if(window.crypto && crypto.subtle){
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+  }catch(e){}
+  return 'plain:' + t;
 }
-function findUserByCredentials(username, password){
+function tokOf(u){ return u.username + '|' + (u.passHash || ''); }
+function saveSession(){
+  if(!currentUser) return;
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ s: currentUser.superAdmin ? 'super' : 'co', c: currentUser.companyId || '', t: currentUser.tok }));
+}
+// Finds a user in a list and verifies the password. Old plain-text passwords are upgraded to hashes on first sign-in.
+async function checkUser(list, scope, username, pw){
   const uname = (username||'').trim().toLowerCase();
-  return state.users.find(u=> u.username.toLowerCase()===uname && u.password===password) || null;
+  const u = (list||[]).find(x=>x.username.toLowerCase()===uname);
+  if(!u) return null;
+  if(u.passHash) return (u.passHash === await hashPw(scope, u.username, pw)) ? u : null;
+  if(u.password !== undefined && u.password === pw){ u.passHash = await hashPw(scope, u.username, pw); delete u.password; pwUpgraded = true; return u; }
+  return null;
 }
+function resetState(){ state = JSON.parse(JSON.stringify(DEFAULT_STATE)); dataDocRef = null; }
 
 function renderConnBadge(){
   const el = document.getElementById('sb-status');
   if(!el) return;
-  if(fbStatus==='ok'){ el.textContent = '● Synced to Firebase'; el.style.color = '#7fbf9a'; }
+  if(fbStatus==='ok'){ el.textContent = '● Synced'; el.style.color = '#7fbf9a'; }
   else if(fbStatus==='error'){ el.textContent = '● Sync error — check Firestore rules'; el.style.color = '#e08a7d'; }
-  else { el.textContent = 'Connecting to Firebase…'; el.style.color = ''; }
+  else { el.textContent = 'Connecting…'; el.style.color = ''; }
 }
 
 /* =========================================================
@@ -1223,24 +1419,114 @@ let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
 let activeTab = "dashboard";
 let saveTimer = null;
 
-async function loadState(){
-  let loaded = false;
-  try{
-    const snap = await getDoc(shopDocRef);
-    if(snap.exists()){
-      const data = snap.data();
-      state = Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)), data);
-    }else{
-      await setDoc(shopDocRef, state);
-    }
-    fbStatus = 'ok'; fbError='';
-    loaded = true;
-  }catch(e){
-    console.error('Firebase load failed', e);
-    fbStatus = 'error'; fbError = e.message||'';
+async function freshPlatform(){
+  const snap = await getDoc(platformRef);
+  if(snap.exists()) platform = Object.assign({ superAdmins: [], companies: [] }, snap.data());
+  return snap.exists();
+}
+async function mutatePlatform(fn){
+  await freshPlatform();
+  fn(platform);
+  await setDoc(platformRef, JSON.parse(JSON.stringify(platform)));
+}
+async function mutateCompany(id, fn){
+  const ref = companyRef(id);
+  const snap = await getDoc(ref);
+  if(!snap.exists()) throw new Error('Company not found.');
+  const d = snap.data(); d.users = d.users || [];
+  fn(d);
+  await setDoc(ref, d);
+  return d;
+}
+// username -> companyId, so sign-in needs only username + password. Built once for existing companies.
+async function ensureIndex(){
+  if(platform.userIndex) return;
+  const idx = {}, sa = new Set(platform.superAdmins.map(u=>u.username.toLowerCase()));
+  for(const c of platform.companies){
+    try{
+      const sn = await getDoc(companyRef(c.id));
+      if(sn.exists()) (sn.data().users||[]).forEach(u=>{ const k = u.username.toLowerCase(); if(!sa.has(k) && !idx[k]) idx[k] = c.id; });
+    }catch(e){}
   }
-  if(!loaded){
-    renderConnBadge();
+  platform.userIndex = idx;
+  await setDoc(platformRef, JSON.parse(JSON.stringify(platform)));
+}
+// Usernames are unique across the whole platform (they decide which company you land in).
+async function claimUsername(user, companyId){
+  const k = user.toLowerCase();
+  await freshPlatform();
+  const taken = 'That username is already used on the platform. Please choose another.';
+  if(platform.superAdmins.some(u=>u.username.toLowerCase()===k)) throw new Error(taken);
+  const owner = (platform.userIndex||{})[k];
+  if(owner && owner !== companyId) throw new Error(taken);
+  if(owner !== companyId) await mutatePlatform(p=>{ p.userIndex = p.userIndex || {}; p.userIndex[k] = companyId; });
+}
+function releaseUsername(user, companyId){
+  const k = user.toLowerCase();
+  mutatePlatform(p=>{ if(p.userIndex && p.userIndex[k]===companyId) delete p.userIndex[k]; }).catch(()=>{});
+}
+// Which company does this login belong to? Uses the index, falls back to scanning if the name isn't indexed yet.
+async function findCompanyUser(username, password){
+  const k = username.trim().toLowerCase();
+  const ids = (platform.userIndex||{})[k] ? [platform.userIndex[k]] : platform.companies.map(c=>c.id);
+  for(const id of ids){
+    try{
+      const sn = await getDoc(companyRef(id));
+      if(!sn.exists()) continue;
+      const users = sn.data().users || [];
+      const rec = await checkUser(users, id, username, password);
+      if(rec) return { id, upgraded: pwUpgraded };
+    }catch(e){}
+  }
+  return null;
+}
+// If the super admin set in this file doesn't exist yet, add it. The old untouched default login
+// (mandalkuntal / Buku@2016) is removed so it can't be used any more.
+async function seedSuperAdmin(){
+  const k = ADMIN_USERNAME.toLowerCase();
+  if(platform.superAdmins.some(u=>u.username.toLowerCase()===k)) return;
+  const oldHash = await hashPw('*', 'mandalkuntal', 'Buku@2016');
+  const newHash = await hashPw('*', ADMIN_USERNAME, ADMIN_BOOTSTRAP_PASSWORD);
+  await mutatePlatform(p=>{
+    p.superAdmins = p.superAdmins.filter(u=>!(u.username.toLowerCase()==='mandalkuntal' && u.passHash===oldHash));
+    p.superAdmins.push({ username: ADMIN_USERNAME, passHash: newHash, createdAt: todayISO() });
+    if(p.userIndex) delete p.userIndex[k];
+  });
+}
+async function loadPlatform(){
+  try{
+    if(!(await freshPlatform())) await bootstrapPlatform();
+    await ensureIndex();
+    await seedSuperAdmin();
+    fbStatus = 'ok'; fbError = ''; renderConnBadge(); return true;
+  }catch(e){
+    console.error('Platform load failed', e);
+    fbStatus = 'error'; fbError = e.message || ''; renderConnBadge(); return false;
+  }
+}
+// First run only: create the super admin and move the old single-shop data into its own company.
+async function bootstrapPlatform(){
+  platform = { superAdmins: [{ username: ADMIN_USERNAME, passHash: await hashPw('*', ADMIN_USERNAME, ADMIN_BOOTSTRAP_PASSWORD), createdAt: todayISO() }], companies: [] };
+  const legacy = await getDoc(legacyRef);
+  if(legacy.exists()){
+    const data = legacy.data();
+    const name = (data.company && data.company.name) || 'My Mobile Shop';
+    const id = slugify(name) || 'main';
+    await setDoc(companyRef(id), data);
+    platform.companies.push({ id, name, createdAt: todayISO(), active: true, createdBy: 'migration' });
+  }
+  await setDoc(platformRef, JSON.parse(JSON.stringify(platform)));
+}
+async function loadCompany(id){
+  try{
+    const ref = companyRef(id);
+    const snap = await getDoc(ref);
+    if(!snap.exists()) return false;
+    state = Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)), snap.data());
+    dataDocRef = ref; fbStatus = 'ok'; fbError = '';
+  }catch(e){
+    console.error('Company load failed', e);
+    fbStatus = 'error'; fbError = e.message || ''; renderConnBadge();
     return false;
   }
   let dirty = false;
@@ -1373,14 +1659,23 @@ function tracksImei(productOrId){
   return !p || p.trackImei!==false; // unknown / not-yet-created products default to tracked
 }
 function saveState(){
+  if(!dataDocRef) return;
   clearTimeout(saveTimer);
+  const ref = dataDocRef, snapshot = JSON.parse(JSON.stringify(state)); // snapshot now, so a company switch can never write the wrong data
   saveTimer = setTimeout(async ()=>{
     try{
-      await setDoc(shopDocRef, JSON.parse(JSON.stringify(state)));
-      fbStatus = 'ok'; fbError='';
+      await setDoc(ref, snapshot);
+      fbStatus = 'ok'; fbError = '';
+      if(currentUser && currentUser.companyId){   // keep the platform's company list name in step with Company Setup
+        const pc = platform.companies.find(c=>c.id===currentUser.companyId);
+        if(pc && snapshot.company && snapshot.company.name && pc.name !== snapshot.company.name){
+          const nm = snapshot.company.name, cid = pc.id;
+          mutatePlatform(p=>{ const c = p.companies.find(x=>x.id===cid); if(c) c.name = nm; }).catch(()=>{});
+        }
+      }
     }catch(e){
       console.error('Firebase save failed', e);
-      fbStatus = 'error'; fbError = e.message||'';
+      fbStatus = 'error'; fbError = e.message || '';
     }
     renderConnBadge();
   }, 400);
@@ -1630,15 +1925,14 @@ const NAV_ITEMS = [
 ];
 
 function renderSidebar(){
-  document.getElementById('sb-shopname').textContent = 'Billzen';
+  renderBrand();
   const sbUser = document.getElementById('sb-user');
   if(sbUser){
-    sbUser.innerHTML = currentUser ? `Signed in as <strong style="color:#fff;">${esc(currentUser.username)}</strong>
-      <div style="margin-top:5px;"><span class="pill ${currentUser.role==='admin'?'good':'neutral'}">${currentUser.role==='admin'?'Admin':'Staff'}</span></div>` : '';
+    sbUser.innerHTML = currentUser ? `<strong style="color:#fff;">${esc(currentUser.username)}</strong> ${roleBadge()}` : '';
   }
   const coBtn = document.querySelector('#commands [data-go="company"]');
   if(coBtn) coBtn.style.display = isAdmin() ? '' : 'none';
-  const items = NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin());
+  const items = navItems();
   if(items.every(it=>it.id!==activeTab) && activeTab!=='overview') activeTab = 'dashboard';
   const nav = document.getElementById('navlist');
   nav.innerHTML = items.map(it=>`
@@ -1646,7 +1940,11 @@ function renderSidebar(){
       <span class="ic">${it.ic}</span><span>${it.label}</span>
     </button></li>
   `).join('');
-  nav.querySelectorAll('.navbtn').forEach(b=>{
+  if(currentUser && currentUser.superAdmin && currentUser.companyId){
+    nav.insertAdjacentHTML('afterbegin', '<li><button class="navbtn back" type="button" id="back-platform"><span class="ic">&#8592;</span><span>Platform Console</span></button></li>');
+    document.getElementById('back-platform').addEventListener('click', backToPlatform);
+  }
+  nav.querySelectorAll('.navbtn[data-tab]').forEach(b=>{
     b.addEventListener('click', ()=>{ activeTab = b.dataset.tab; render(); closeMobileSidebar(); });
   });
   const mtTitle = document.getElementById('mt-title');
@@ -1921,6 +2219,7 @@ function gwRun(t){
    RENDER ROOT
    ========================================================= */
 function render(){
+  if(isPlatformMode() && activeTab!=='platform' && activeTab!=='superadmins') activeTab = 'platform';
   reconcileProductStocks();
   renderSidebar();
   const main = document.getElementById('main');
@@ -1932,7 +2231,8 @@ function render(){
   if(active && main.contains(active) && active.id){
     focusInfo = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
   }
-  if(activeTab==='dashboard') main.innerHTML = viewGateway();
+  if(isPlatformMode()) main.innerHTML = viewPlatformTab();
+  else if(activeTab==='dashboard') main.innerHTML = viewGateway();
   else if(activeTab==='overview') main.innerHTML = viewDashboard();
   else if(activeTab==='company') main.innerHTML = isAdmin() ? viewCompany() : viewDashboard();
   else if(activeTab==='products') main.innerHTML = viewProducts();
@@ -1942,7 +2242,7 @@ function render(){
   else if(activeTab==='ledger') main.innerHTML = viewLedger();
   else if(activeTab==='reports') main.innerHTML = viewReports();
   else if(activeTab==='users') main.innerHTML = isAdmin() ? viewUsers() : viewDashboard();
-  attachHandlers();
+  if(!isPlatformMode()) attachHandlers();
   if(focusInfo){
     const el = document.getElementById(focusInfo.id);
     if(el && typeof el.focus==='function'){
@@ -2804,30 +3104,37 @@ function exportCategoryReportCsv(){
    ========================================================= */
 function viewUsers(){
   const list = [...state.users].sort((a,b)=> (a.role===b.role) ? a.username.localeCompare(b.username) : (a.role==='admin'?-1:1));
+  const me = currentUser ? currentUser.username : '';
   return `
     <div class="pagehead">
-      <div><h1>Users</h1><div class="desc">Staff logins that can sign in to this shop ledger</div></div>
+      <div><h1>Users</h1><div class="desc">People who can sign in to <strong>${esc(state.company.name||'this company')}</strong> — they cannot access any other company</div></div>
       <button class="btn primary" data-action="add-user">+ Add User</button>
+    </div>
+    <div class="card co-id-card">
+      <div><div class="kpi-cap">Company</div><strong style="font-size:16px;">${esc(state.company.name||'')}</strong></div>
+      <div class="desc" style="max-width:560px;">Each person signs in with just their own username and password and lands in this company. Usernames are unique across the whole platform.</div>
     </div>
     <div class="card">
       ${list.length===0? emptyState('No users yet','Add a staff login below.') : `
-      <table><thead><tr><th>Username</th><th>Role</th><th>Added</th><th></th></tr></thead><tbody>
+      <div style="overflow-x:auto;"><table><thead><tr><th>Username</th><th>Role</th><th>Added</th><th></th></tr></thead><tbody>
       ${list.map(u=>`
         <tr>
-          <td><strong>${esc(u.username)}</strong>${currentUser && currentUser.username===u.username?' <span class="pill neutral">You</span>':''}</td>
+          <td><div style="display:flex;align-items:center;gap:10px;"><span class="avatar">${esc(u.username[0].toUpperCase())}</span><strong>${esc(u.username)}</strong>${me===u.username && !currentUser.superAdmin?' <span class="pill neutral">You</span>':''}${u.owner?' <span class="pill info">Owner</span>':''}</div></td>
           <td><span class="pill ${u.role==='admin'?'good':'neutral'}">${u.role==='admin'?'Admin':'Staff'}</span></td>
           <td>${u.createdAt?fmtDate(u.createdAt):'-'}</td>
-          <td style="text-align:right;">
-            ${(!currentUser || currentUser.username!==u.username) ? `<button class="btn sm danger" data-action="del-user" data-username="${esc(u.username)}">Remove access</button>` : ''}
+          <td style="text-align:right;white-space:nowrap;">
+            <button class="btn sm" data-ua="pw" data-u="${esc(u.username)}">Reset password</button>
+            ${(me!==u.username && (!u.owner || currentUser.superAdmin)) ? `<button class="btn sm danger" data-action="del-user" data-username="${esc(u.username)}">Remove</button>` : ''}
           </td>
         </tr>`).join('')}
-      </tbody></table>`}
+      </tbody></table></div>`}
     </div>
-    <div class="card" style="max-width:560px;">
+    <div class="card" style="max-width:620px;">
       <h3>About access levels</h3>
       <div style="font-size:13px;color:var(--ink-soft);line-height:1.7;">
-        <strong>Admin</strong> — can create, edit and delete bills at any time, and add or remove users.<br>
-        <strong>Staff</strong> — can create bills, purchases and manage products, but cannot edit or delete a bill once it's saved.
+        <strong>Admin</strong> — full access to this company: create, edit and delete bills, change company setup, and add or remove other admins and staff.<br>
+        <strong>Staff</strong> — can create bills, purchases and manage products, but cannot edit or delete a bill once it's saved.<br>
+        <strong>Super admin</strong> (platform owner) — creates companies and company admins; not listed here.
       </div>
     </div>
   `;
@@ -2840,11 +3147,11 @@ function userFormModal(){
       <div class="modal-head"><h2>Add User</h2><button class="modal-close" data-close="modal">&times;</button></div>
       <div class="login-error" id="user-form-error" style="display:none;"></div>
       <div class="field"><label>Username</label><input type="text" id="u-username" placeholder="e.g. rahul" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
-      <div class="field"><label>Password</label><input type="text" id="u-password" placeholder="Set a password for this user (min 4 characters)"></div>
+      <div class="field"><label>Password</label><input type="text" id="u-password" placeholder="Set a password for this user (min 6 characters)"></div>
       <div class="field"><label>Role</label>
         <select id="u-role">
           <option value="staff">Staff — cannot edit/delete bills</option>
-          <option value="admin">Admin — full access</option>
+          <option value="admin">Admin — full access, can manage users</option>
         </select>
       </div>
       <div style="text-align:right; margin-top:8px;">
@@ -2859,12 +3166,14 @@ function doRemoveUser(username){
   if(!isAdmin()) return;
   const rec = state.users.find(u=>u.username===username);
   if(!rec) return;
+  if(rec.owner && !currentUser.superAdmin){ alert('The company owner account can only be removed by a platform super admin.'); return; }
   if(rec.role==='admin' && state.users.filter(u=>u.role==='admin').length<=1){
     alert('At least one admin must remain — add another admin before removing this one.');
     return;
   }
   if(!confirm(`Remove access for "${username}"? They will no longer be able to sign in.`)) return;
   state.users = state.users.filter(u=>u.username!==username);
+  releaseUsername(username, currentUser.companyId);
   saveState(); render();
 }
 
@@ -4250,7 +4559,7 @@ function attachModalHandlers(){
 
   // Add-user modal (admin-only) — stored directly in state.users, no external auth service needed.
   const saveUserBtn = root.querySelector('[data-action="save-user"]');
-  if(saveUserBtn) saveUserBtn.addEventListener('click', ()=>{
+  if(saveUserBtn) saveUserBtn.addEventListener('click', async ()=>{
     if(!isAdmin()){ alert('Only an admin can add users.'); return; }
     const errBox = document.getElementById('user-form-error');
     const showErr = m=>{ errBox.textContent = m; errBox.style.display = 'block'; };
@@ -4258,11 +4567,243 @@ function attachModalHandlers(){
     const password = document.getElementById('u-password').value;
     const role = document.getElementById('u-role').value;
     if(!/^[a-zA-Z0-9._-]{3,}$/.test(username)){ showErr('Username must be 3+ characters: letters, numbers, dot, underscore or hyphen only.'); return; }
-    if(!password || password.length<4){ showErr('Password must be at least 4 characters.'); return; }
-    if(state.users.some(u=>u.username.toLowerCase()===username.toLowerCase())){ showErr('That username is already taken.'); return; }
-    state.users.push({ username, password, role, createdAt: todayISO(), createdBy: currentUser? currentUser.username : '' });
+    if(!password || password.length<MIN_PW){ showErr(`Password must be at least ${MIN_PW} characters.`); return; }
+    if(state.users.some(u=>u.username.toLowerCase()===username.toLowerCase())){ showErr('That username is already taken in this company.'); return; }
+    try{ await claimUsername(username, currentUser.companyId); }catch(e){ showErr(e.message); return; }
+    const passHash = await hashPw(currentUser.companyId, username, password);
+    state.users.push({ username, passHash, role, createdAt: todayISO(), createdBy: currentUser? currentUser.username : '' });
     saveState(); closeModal(); render();
   });
+}
+
+/* =========================================================
+   PLATFORM CONSOLE (super admin) + MULTI-COMPANY HELPERS
+   ========================================================= */
+const PLATFORM_NAV = [
+  { id:'platform', label:'Companies', ic:'&#127970;' },
+  { id:'superadmins', label:'Super Admins', ic:'&#128737;' },
+];
+function navItems(){ return isPlatformMode() ? PLATFORM_NAV : NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin()); }
+function renderBrand(){
+  const el = document.getElementById('sb-shopname');
+  const co = isPlatformMode() ? 'Platform Console' : ((state.company && state.company.name) || '');
+  el.innerHTML = 'Billzen' + (co ? `<span class="co-chip">${esc(co)}</span>` : '');
+  document.body.classList.toggle('platform-mode', isPlatformMode());
+}
+function roleBadge(){
+  if(!currentUser) return '';
+  if(currentUser.superAdmin) return '<span class="pill info">Super Admin</span>';
+  return currentUser.role==='admin' ? '<span class="pill good">Admin</span>' : '<span class="pill neutral">Staff</span>';
+}
+async function openCompanyAsSuper(id){
+  if(!(await loadCompany(id))){ alert('Could not open this company.' + (fbError? ' '+fbError : '')); return; }
+  currentUser.companyId = id; activeTab = 'dashboard'; saveSession(); render();
+}
+function backToPlatform(){
+  resetState(); currentUser.companyId = null; activeTab = 'platform'; saveSession(); render();
+}
+function viewPlatformTab(){ return activeTab==='superadmins' ? viewSuperAdmins() : viewCompanies(); }
+function viewCompanies(){
+  const list = [...platform.companies].sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  const act = list.filter(c=>c.active!==false).length;
+  const kpi = (l,v,c='')=>`<div class="kpi ${c}"><div class="label">${l}</div><div class="value">${v}</div></div>`;
+  return `
+  <div class="pagehead">
+    <div><h1>Companies</h1><div class="desc">Each company is a separate workspace with its own users, stock, bills and ledgers.</div></div>
+    <button class="btn primary" data-pa="new-company">+ New Company</button>
+  </div>
+  <div class="kpis">${kpi('Companies',list.length)}${kpi('Active',act,'good')}${kpi('Suspended',list.length-act,'bad')}${kpi('Super admins',platform.superAdmins.length,'info')}</div>
+  <div class="card">
+    ${list.length===0 ? emptyState('No companies yet','Create the first company and its admin.') : `
+    <div style="overflow-x:auto;"><table><thead><tr><th>Company</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>
+    ${list.map(c=>{ const on = c.active!==false; return `
+      <tr>
+        <td><div style="display:flex;align-items:center;gap:10px;"><span class="avatar">${esc((c.name||'?')[0].toUpperCase())}</span><strong>${esc(c.name)}</strong></div></td>
+        <td><span class="pill ${on?'good':'bad'}">${on?'Active':'Suspended'}</span></td>
+        <td>${c.createdAt?fmtDate(c.createdAt):'-'}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="btn sm" data-pa="admins" data-id="${esc(c.id)}">Users &amp; admins</button>
+          <button class="btn sm" data-pa="open" data-id="${esc(c.id)}">Open</button>
+          <button class="btn sm ${on?'danger':''}" data-pa="toggle" data-id="${esc(c.id)}">${on?'Suspend':'Activate'}</button>
+        </td>
+      </tr>`; }).join('')}
+    </tbody></table></div>`}
+  </div>`;
+}
+function viewSuperAdmins(){
+  const me = currentUser.username;
+  return `
+  <div class="pagehead">
+    <div><h1>Super Admins</h1><div class="desc">Platform owners. They can create companies and company admins, and open any company.</div></div>
+    <button class="btn primary" data-pa="add-sa">+ Add Super Admin</button>
+  </div>
+  <div class="card"><div style="overflow-x:auto;"><table><thead><tr><th>Username</th><th>Added</th><th></th></tr></thead><tbody>
+    ${platform.superAdmins.map(u=>`
+      <tr>
+        <td><div style="display:flex;align-items:center;gap:10px;"><span class="avatar">${esc(u.username[0].toUpperCase())}</span><strong>${esc(u.username)}</strong>${u.username===me?' <span class="pill neutral">You</span>':''}</div></td>
+        <td>${u.createdAt?fmtDate(u.createdAt):'-'}</td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="btn sm" data-pa="pw-sa" data-u="${esc(u.username)}">${u.username===me?'Change password':'Reset password'}</button>
+          ${u.username!==me && platform.superAdmins.length>1 ? `<button class="btn sm danger" data-pa="rm-sa" data-u="${esc(u.username)}">Remove</button>` : ''}
+        </td>
+      </tr>`).join('')}
+  </tbody></table></div></div>`;
+}
+
+// Small reusable form modal. onSubmit throws Error(message) to show an inline error; it closes the modal itself on success.
+function formModal(title, fields, submitLabel, onSubmit){
+  openModal(`<div class="modal-bg" data-close="modal"><div class="modal" data-stop>
+    <div class="modal-head"><h2>${esc(title)}</h2><button class="modal-close" data-close="modal">&times;</button></div>
+    <div class="login-error" id="fm-err"></div>
+    ${fields.map(f=> f.type==='select'
+      ? `<div class="field"><label>${f.label}</label><select id="fm-${f.id}">${f.options.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select></div>`
+      : `<div class="field"><label>${f.label}</label><input type="${f.type||'text'}" id="fm-${f.id}" placeholder="${esc(f.ph||'')}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>`).join('')}
+    <div style="text-align:right;margin-top:8px;"><button class="btn ghost" data-close="modal">Cancel</button> <button class="btn primary" id="fm-go">${esc(submitLabel)}</button></div>
+  </div></div>`);
+  const err = document.getElementById('fm-err'), go = document.getElementById('fm-go');
+  go.addEventListener('click', async ()=>{
+    err.style.display = 'none';
+    const v = {}; fields.forEach(f=>{ v[f.id] = document.getElementById('fm-'+f.id).value; });
+    go.disabled = true;
+    try{ await onSubmit(v); }catch(ex){ err.textContent = ex.message || String(ex); err.style.display = 'block'; go.disabled = false; }
+  });
+  const first = document.getElementById('fm-'+fields[0].id); if(first) first.focus();
+}
+const USER_RE = /^[a-zA-Z0-9._-]{3,}$/;
+function checkNewUser(user, pw){
+  if(!USER_RE.test(user)) throw new Error('Username must be 3+ characters: letters, numbers, dot, underscore or hyphen only.');
+  if((pw||'').length < MIN_PW) throw new Error(`Password must be at least ${MIN_PW} characters.`);
+}
+
+function newCompanyModal(){
+  formModal('New Company', [
+    { id:'name', label:'Company name', ph:'e.g. Sharma Mobiles' },
+    { id:'user', label:'Company admin username', ph:'e.g. sharma' },
+    { id:'pw', label:'Company admin password', ph:`Min ${MIN_PW} characters` },
+  ], 'Create Company', async v=>{
+    const name = v.name.trim(), user = v.user.trim();
+    if(!name) throw new Error('Enter the company name.');
+    checkNewUser(user, v.pw);
+    await freshPlatform();
+    const base = slugify(name) || 'company'; let id = base, n = 2;
+    while(platform.companies.some(c=>c.id===id)) id = base + '-' + (n++);
+    await claimUsername(user, id);
+    try{
+      if((await getDoc(companyRef(id))).exists()) throw new Error('A company with this name already exists. Use a different name.');
+      const st = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      st.company.name = name;
+      st.users = [{ username:user, passHash: await hashPw(id, user, v.pw), role:'admin', owner:true, createdAt:todayISO(), createdBy:currentUser.username }];
+      await setDoc(companyRef(id), st);
+      await mutatePlatform(p=>p.companies.push({ id, name, createdAt:todayISO(), active:true, createdBy:currentUser.username }));
+    }catch(e){ releaseUsername(user, id); throw e; }
+    closeModal(); render();
+  });
+}
+
+async function adminsModal(id){
+  let data;
+  try{ const sn = await getDoc(companyRef(id)); if(!sn.exists()) throw new Error('missing'); data = sn.data(); }
+  catch(e){ alert('Could not load this company.'); return; }
+  const co = platform.companies.find(c=>c.id===id) || { name:id };
+  const users = [...(data.users||[])].sort((a,b)=> (a.role===b.role) ? a.username.localeCompare(b.username) : (a.role==='admin'?-1:1));
+  openModal(`<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop>
+    <div class="modal-head"><h2>${esc(co.name)} — users</h2><button class="modal-close" data-close="modal">&times;</button></div>
+    <div class="desc" style="margin-bottom:12px;color:var(--ink-soft);font-size:13px;">Admins can add more admins and staff for this company only.</div>
+    <div style="overflow-x:auto;"><table><thead><tr><th>Username</th><th>Role</th><th></th></tr></thead><tbody>
+    ${users.map(u=>`<tr>
+      <td><strong>${esc(u.username)}</strong>${u.owner?' <span class="pill info">Owner</span>':''}</td>
+      <td><span class="pill ${u.role==='admin'?'good':'neutral'}">${u.role==='admin'?'Admin':'Staff'}</span></td>
+      <td style="text-align:right;white-space:nowrap;"><button class="btn sm" data-pm="pw" data-u="${esc(u.username)}">Reset password</button> <button class="btn sm danger" data-pm="rm" data-u="${esc(u.username)}">Remove</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div style="text-align:right;margin-top:14px;"><button class="btn primary" data-pm="add">+ Add Admin / User</button></div>
+  </div></div>`);
+  const reopen = ()=>adminsModal(id);
+  document.querySelectorAll('#modal-root [data-pm]').forEach(b=>b.addEventListener('click', ()=>{
+    const act = b.dataset.pm, uname = b.dataset.u;
+    if(act==='add'){
+      formModal('Add admin or user', [
+        { id:'user', label:'Username', ph:'e.g. rahul' },
+        { id:'pw', label:'Password', ph:`Min ${MIN_PW} characters` },
+        { id:'role', label:'Role', type:'select', options:[['admin','Admin — full access, can manage users'],['staff','Staff — cannot edit/delete bills']] },
+      ], 'Create', async v=>{
+        const user = v.user.trim(); checkNewUser(user, v.pw);
+        await claimUsername(user, id);
+        const h = await hashPw(id, user, v.pw);
+        await mutateCompany(id, d=>{
+          if(d.users.some(u=>u.username.toLowerCase()===user.toLowerCase())) throw new Error('That username is already taken in this company.');
+          d.users.push({ username:user, passHash:h, role:v.role, createdAt:todayISO(), createdBy:currentUser.username });
+        });
+        reopen();
+      });
+    }else if(act==='pw'){
+      formModal('Reset password — '+uname, [{ id:'pw', label:'New password', ph:`Min ${MIN_PW} characters` }], 'Save password', async v=>{
+        if(v.pw.length < MIN_PW) throw new Error(`Password must be at least ${MIN_PW} characters.`);
+        const h = await hashPw(id, uname, v.pw);
+        await mutateCompany(id, d=>{ const u = d.users.find(x=>x.username===uname); if(!u) throw new Error('User not found.'); u.passHash = h; delete u.password; });
+        reopen();
+      });
+    }else if(act==='rm'){
+      if(!confirm(`Remove "${uname}" from ${co.name}?`)) return;
+      mutateCompany(id, d=>{
+        const u = d.users.find(x=>x.username===uname); if(!u) return;
+        if(u.role==='admin' && d.users.filter(x=>x.role==='admin').length<=1) throw new Error('A company must keep at least one admin. Add another admin first.');
+        d.users = d.users.filter(x=>x.username!==uname);
+      }).then(()=>{ releaseUsername(uname, id); reopen(); }).catch(e=>alert(e.message));
+    }
+  }));
+}
+
+async function handleConsoleClick(e){
+  const b = e.target.closest('[data-pa],[data-ua]'); if(!b) return;
+  try{
+    if(b.dataset.ua==='pw'){   // company admin resets a user's password
+      if(!isAdmin()) return;
+      const uname = b.dataset.u;
+      formModal('Reset password — '+uname, [{ id:'pw', label:'New password', ph:`Min ${MIN_PW} characters` }], 'Save password', async v=>{
+        if(v.pw.length < MIN_PW) throw new Error(`Password must be at least ${MIN_PW} characters.`);
+        const u = state.users.find(x=>x.username===uname); if(!u) throw new Error('User not found.');
+        u.passHash = await hashPw(currentUser.companyId, u.username, v.pw); delete u.password;
+        if(!currentUser.superAdmin && currentUser.username===u.username){ currentUser.tok = tokOf(u); saveSession(); }
+        saveState(); closeModal(); render();
+      });
+      return;
+    }
+    if(!isPlatformMode()) return;
+    const a = b.dataset.pa, id = b.dataset.id, uname = b.dataset.u;
+    if(a==='new-company') newCompanyModal();
+    else if(a==='admins') adminsModal(id);
+    else if(a==='open') openCompanyAsSuper(id);
+    else if(a==='toggle'){
+      const c = platform.companies.find(x=>x.id===id); if(!c) return;
+      const on = c.active!==false;
+      if(!confirm(on ? `Suspend "${c.name}"? Nobody in this company will be able to sign in until you activate it again. Data is kept.` : `Activate "${c.name}"?`)) return;
+      await mutatePlatform(p=>{ const x = p.companies.find(y=>y.id===id); if(x) x.active = !on; });
+      render();
+    }
+    else if(a==='add-sa'){
+      formModal('Add Super Admin', [{ id:'user', label:'Username', ph:'e.g. owner2' }, { id:'pw', label:'Password', ph:`Min ${MIN_PW} characters` }], 'Create', async v=>{
+        const user = v.user.trim(); checkNewUser(user, v.pw);
+        const h = await hashPw('*', user, v.pw);
+        await mutatePlatform(p=>{ if(p.superAdmins.some(u=>u.username.toLowerCase()===user.toLowerCase())) throw new Error('That username is already a super admin.'); if((p.userIndex||{})[user.toLowerCase()]) throw new Error('That username is already used by a company user.'); p.superAdmins.push({ username:user, passHash:h, createdAt:todayISO() }); });
+        closeModal(); render();
+      });
+    }
+    else if(a==='pw-sa'){
+      const self = uname===currentUser.username;
+      formModal((self?'Change password':'Reset password — '+uname), [{ id:'pw', label:'New password', type:'text', ph:`Min ${MIN_PW} characters` }], 'Save password', async v=>{
+        if(v.pw.length < MIN_PW) throw new Error(`Password must be at least ${MIN_PW} characters.`);
+        const h = await hashPw('*', uname, v.pw);
+        await mutatePlatform(p=>{ const u = p.superAdmins.find(x=>x.username===uname); if(!u) throw new Error('User not found.'); u.passHash = h; delete u.password; });
+        if(self){ currentUser.tok = uname+'|'+h; saveSession(); }
+        closeModal(); render();
+      });
+    }
+    else if(a==='rm-sa'){
+      if(!confirm(`Remove super admin "${uname}"?`)) return;
+      await mutatePlatform(p=>{ if(p.superAdmins.length<=1) throw new Error('At least one super admin must remain.'); p.superAdmins = p.superAdmins.filter(u=>u.username!==uname); });
+      render();
+    }
+  }catch(ex){ alert(ex.message || String(ex)); }
 }
 
 /* =========================================================
@@ -4283,86 +4824,99 @@ function attachModalHandlers(){
 
   function showError(msg){ errBox.textContent = msg; errBox.style.display = 'block'; }
   function hideError(){ errBox.style.display = 'none'; }
-
-  function clearLogoutTimer(){
-    if(logoutTimer){ clearTimeout(logoutTimer); logoutTimer = null; }
-  }
-
+  function clearLogoutTimer(){ if(logoutTimer){ clearTimeout(logoutTimer); logoutTimer = null; } }
   function resetLogoutTimer(){
     if(!currentUser) return;
     clearLogoutTimer();
-    logoutTimer = setTimeout(()=>{
-      if(currentUser){
-        performLogout('Your session expired after 20 minutes of inactivity.');
-      }
-    }, AUTO_LOGOUT_MS);
+    logoutTimer = setTimeout(()=>{ if(currentUser) performLogout('Your session expired after 20 minutes of inactivity.'); }, AUTO_LOGOUT_MS);
   }
-
-  function performLogout(message=''){ 
-    currentUser = null;
+  function performLogout(message=''){
+    currentUser = null; resetState();
     localStorage.removeItem(SESSION_KEY);
-    clearLogoutTimer();
+    clearLogoutTimer(); closeModal();
     appRoot.style.display = 'none';
     loginScreen.style.display = 'flex';
-    userInp.value = ''; passInp.value = ''; 
-    if(message){ showError(message); }
-    else { hideError(); }
+    userInp.value = ''; passInp.value = '';
+    document.body.classList.remove('platform-mode');
+    if(message){ showError(message); } else { hideError(); }
     if(typeof closeMobileSidebar==='function') closeMobileSidebar();
   }
-
-  function signInAs(rec){
-    currentUser = { username: rec.username, role: rec.role };
-    localStorage.setItem(SESSION_KEY, sessTok(rec));
+  function signIn(rec, superAdmin, companyId){
+    currentUser = { username: rec.username, role: superAdmin ? 'admin' : rec.role, superAdmin, companyId: companyId || null, tok: tokOf(rec) };
+    saveSession();
     loginScreen.style.display = 'none';
     appRoot.style.display = 'flex';
+    activeTab = isPlatformMode() ? 'platform' : 'dashboard';
     if(typeof closeMobileSidebar==='function') closeMobileSidebar();
     resetLogoutTimer();
     render();
   }
 
-  function doLogin(){
+  // One form for everyone: super admins land in the platform console, everyone else in their own company.
+  async function doLogin(){
     hideError();
-    const username = userInp.value.trim();
-    const password = passInp.value;
+    const username = userInp.value.trim(), password = passInp.value;
     if(!username || !password){ showError('Enter your username and password.'); return; }
-    const rec = findUserByCredentials(username, password);
-    if(!rec){ showError('Incorrect username or password.'); return; }
-    signInAs(rec);
+    submitBtn.disabled = true;
+    const bad = 'Incorrect username or password.';
+    try{
+      await freshPlatform();
+      const sa = await checkUser(platform.superAdmins, '*', username, password);
+      if(sa){ signIn(sa, true, null); return; }
+      const hit = await findCompanyUser(username, password);
+      if(!hit){ showError(bad); return; }
+      const co = platform.companies.find(c=>c.id===hit.id);
+      if(!co){ showError(bad); return; }
+      if(co.active === false){ showError('This company is suspended. Please contact your platform administrator.'); return; }
+      if(!(await loadCompany(hit.id))){ showError(fbError ? 'Could not load company data: '+fbError : bad); return; }
+      const rec = await checkUser(state.users, hit.id, username, password);
+      if(!rec){ resetState(); showError(bad); return; }
+      if(pwUpgraded){ pwUpgraded = false; saveState(); }
+      if(!(platform.userIndex||{})[rec.username.toLowerCase()]) mutatePlatform(p=>{ p.userIndex = p.userIndex||{}; p.userIndex[rec.username.toLowerCase()] = hit.id; }).catch(()=>{});
+      signIn(rec, false, hit.id);
+    }catch(e){ showError('Sign-in failed: ' + (e.message || e)); }
+    finally{ submitBtn.disabled = false; }
   }
 
-  const activityEvents = ['click', 'keydown', 'mousemove', 'touchstart', 'scroll', 'pointerdown'];
-  activityEvents.forEach(evt => document.addEventListener(evt, resetLogoutTimer, { passive: true }));
-
+  ['click','keydown','mousemove','touchstart','scroll','pointerdown'].forEach(evt => document.addEventListener(evt, resetLogoutTimer, { passive: true }));
   submitBtn.addEventListener('click', doLogin);
   passInp.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
   userInp.addEventListener('keydown', e=>{ if(e.key==='Enter') passInp.focus(); });
-
-  if(signoutBtn) signoutBtn.onclick = ()=>{
-    performLogout();
-  };
+  if(signoutBtn) signoutBtn.onclick = ()=> performLogout();
+  document.getElementById('main').addEventListener('click', handleConsoleClick);
 
   async function boot(){
-    submitBtn.disabled = true;
-    retryDbBtn.hidden = true;
-    if(loginStatus) loginStatus.textContent = 'Connecting to your shop data...';
-    const loaded = await loadState();
-    if(!loaded){
-      if(loginStatus) loginStatus.textContent = `Database connection failed: ${fbError || 'Check your internet connection and Firestore rules.'}`;
+    submitBtn.disabled = true; retryDbBtn.hidden = true;
+    loginStatus.textContent = 'Connecting…';
+    if(!(await loadPlatform())){
+      loginStatus.textContent = `Database connection failed: ${fbError || 'Check your internet connection and Firestore rules.'}`;
       retryDbBtn.hidden = false;
       return;
     }
-    seedAdminIfNeeded();
-    const savedUsername = localStorage.getItem(SESSION_KEY);
-    const rec = savedUsername ? state.users.find(u=>sessTok(u)===savedUsername) : null;
-    if(rec){
-      signInAs(rec);
-    }else{
+    let restored = false;
+    try{
+      const sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if(sess && sess.t){
+        if(sess.s==='super'){
+          const rec = platform.superAdmins.find(u=>tokOf(u)===sess.t);
+          if(rec && !sess.c){ signIn(rec, true, null); restored = true; }
+          else if(rec && await loadCompany(sess.c)){ signIn(rec, true, sess.c); restored = true; }
+        }else{
+          const co = platform.companies.find(c=>c.id===sess.c);
+          if(co && co.active!==false && await loadCompany(sess.c)){
+            const rec = state.users.find(u=>tokOf(u)===sess.t);
+            if(rec){ signIn(rec, false, sess.c); restored = true; } else resetState();
+          }
+        }
+      }
+    }catch(e){ resetState(); }
+    if(!restored){
       localStorage.removeItem(SESSION_KEY);
       appRoot.style.display = 'none';
       loginScreen.style.display = 'flex';
     }
     submitBtn.disabled = false;
-    if(loginStatus) loginStatus.textContent = 'Sign in to continue managing your shop';
+    loginStatus.textContent = 'Sign in to continue';
   }
   retryDbBtn.addEventListener('click', boot);
   boot();
