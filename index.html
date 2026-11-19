@@ -1466,6 +1466,7 @@ const DEFAULT_STATE = {
   customers: [],
   suppliers: [],
   imeiUnits: [],
+  med: { items:[], batches:[], purchases:[], sales:[], counters:{ invoice:1, purchase:1 } },
   categories: [],
   counters: { invoice: 1, purchase: 1 },
   sigStore: {},
@@ -1991,7 +1992,7 @@ function renderSidebar(){
   const coBtn = document.querySelector('#commands [data-go="company"]');
   if(coBtn) coBtn.style.display = isAdmin() ? '' : 'none';
   const items = navItems();
-  if(items.every(it=>it.id!==activeTab) && activeTab!=='overview') activeTab = 'dashboard';
+  if(items.every(it=>it.id!==activeTab) && activeTab!=='overview' && activeTab!=='meddash') activeTab = 'dashboard';
   const nav = document.getElementById('navlist');
   nav.innerHTML = items.map(it=>`
     <li><button class="navbtn ${activeTab===it.id?'active':''}" data-tab="${it.id}">
@@ -2079,6 +2080,7 @@ function globalFind(raw){
 }
 let gwSel = 0;
 function gwItems(){
+  if(isMedCo()) return medGwItems();
   const it = [
     {sec:'Masters'},
     {l:'Products & Stock', t:'products', h:'P'}, {l:'Customers & Suppliers', t:'ledger', h:'C'},
@@ -2283,6 +2285,7 @@ function render(){
     const vco = platform.companies.find(c=>c.id===currentUser.companyId);
     if(isValidityExpired(vco)){ alert('Your company validity has ended. Please contact your administrator to renew.'); const so = document.getElementById('signout-btn'); if(so){ so.click(); return; } }
   }
+  if(isMedCo()){ medTabGuard(); if(MED_REDIRECT[activeTab]) activeTab = MED_REDIRECT[activeTab]; }
   reconcileProductStocks();
   renderSidebar();
   renderValidityBanner();
@@ -2296,6 +2299,7 @@ function render(){
     focusInfo = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
   }
   if(isPlatformMode()) main.innerHTML = viewPlatformTab();
+  else if(isMedCo() && /^med/.test(activeTab)) main.innerHTML = medView();
   else if(activeTab==='dashboard') main.innerHTML = viewGateway();
   else if(activeTab==='overview') main.innerHTML = viewDashboard();
   else if(activeTab==='company') main.innerHTML = isAdmin() ? viewCompany() : viewDashboard();
@@ -2680,6 +2684,7 @@ function viewCompany(){
         <div class="field"><label>Email</label><input type="email" id="c-email" value="${esc(c.email)}"></div>
       </div>
       <div class="field"><label>GSTIN (optional)</label><input type="text" id="c-gst" value="${esc(c.gst)}"></div>
+      ${c.businessType==='medicine' ? `<div class="field"><label>Drug Licence No(s). (printed on every medicine bill)</label><input type="text" id="c-dlno" value="${esc(c.dlNo||'')}" placeholder="e.g. 20/WB/123 , 21/WB/124"></div>` : ''}
       <h3 style="margin-top:18px;">GST Tax Invoice Details</h3>
       <div class="desc" style="margin-bottom:10px;">Fill these in to print bills as a proper GST Tax Invoice (like your supplier's format). Leave GSTIN blank to print a plain bill instead.</div>
       <div class="grid cols-2">
@@ -4346,8 +4351,9 @@ function fitContentWidth(box, base){
 }
 async function buildBillPdf(s, c){
   if(!window.html2canvas || !window.jspdf) throw new Error('PDF library could not load. Check your internet connection.');
-  const useGst = !!(c.gst && c.gst.trim());
-  const html = useGst ? gstInvoiceHtml(s, c) : plainInvoiceHtml(s, c);
+  const isMed = isMedSale(s);
+  const useGst = isMed || !!(c.gst && c.gst.trim());
+  const html = isMed ? medInvoiceHtml(s, c) : (useGst ? gstInvoiceHtml(s, c) : plainInvoiceHtml(s, c));
   const host = document.createElement('div');
   // Keep the sheet inside the page (not off-screen / fixed): Android Chrome renders off-screen fixed nodes as blank in html2canvas.
   host.style.cssText = 'position:absolute;left:0;top:0;background:#fff;width:' + (useGst?820:620) + 'px;z-index:-1;pointer-events:none;';
@@ -4424,9 +4430,10 @@ async function showBillViewer(id){
     state.imeiUnits = d.imeiUnits || [];
     const sale = d.sale, c = state.company;
     sale._sig = d.sig || { sign:'', seal:'' };
-    const useGst = !!(c.gst && c.gst.trim());
+    const isMed = isMedSale(sale);
+    const useGst = isMed || !!(c.gst && c.gst.trim());
     W = useGst ? 820 : 620;
-    sheet.innerHTML = useGst ? gstInvoiceHtml(sale, c) : plainInvoiceHtml(sale, c);
+    sheet.innerHTML = isMed ? medInvoiceHtml(sale, c) : (useGst ? gstInvoiceHtml(sale, c) : plainInvoiceHtml(sale, c));
     document.title = (sale.invoiceNo||'Bill') + ' — ' + (c.name||'Bill');
     fit();
     window.addEventListener('resize', fit);
@@ -4452,11 +4459,11 @@ async function showBillViewer(id){
   }
 }
 async function sendBillWhatsApp(saleId){
-  const s = state.sales.find(x=>x.id===saleId);
+  const s = state.sales.find(x=>x.id===saleId) || ((state.med && state.med.sales) || []).find(x=>x.id===saleId);
   if(!s) return;
   const c = state.company;
   // customer number comes from the bill; fall back to the customer directory by name
-  let custPhone = s.customerPhone || '';
+  let custPhone = s.customerPhone || s.phone || '';
   if(!custPhone && s.customer){
     const cu = (state.customers||[]).find(x=>(x.name||'').trim().toLowerCase()===s.customer.trim().toLowerCase() && x.phone);
     if(cu) custPhone = cu.phone;
@@ -4558,6 +4565,8 @@ function attachHandlers(){
       bankIFSC: document.getElementById('c-bankifsc').value.trim(),
       logo: companyLogoDraft !== null ? companyLogoDraft : (state.company.logo||''),
       bill: readBillCfgForm(),
+      businessType: state.company.businessType || '',
+      dlNo: (document.getElementById('c-dlno') ? document.getElementById('c-dlno').value.trim() : (state.company.dlNo||'')),
     };
     companyLogoDraft = null;
     saveState(); render();
@@ -5347,7 +5356,7 @@ const PLATFORM_NAV = [
   { id:'platform', label:'Companies', ic:'&#127970;' },
   { id:'superadmins', label:'Super Admins', ic:'&#128737;' },
 ];
-function navItems(){ return isPlatformMode() ? PLATFORM_NAV : NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin()); }
+function navItems(){ if(!isPlatformMode() && isMedCo()) return MED_NAV.filter(it=> !it.adminOnly || isAdmin()); return isPlatformMode() ? PLATFORM_NAV : NAV_ITEMS.filter(it=> !it.adminOnly || isAdmin()); }
 function renderBrand(){
   const el = document.getElementById('sb-shopname');
   const co = isPlatformMode() ? 'Platform Console' : ((state.company && state.company.name) || '');
@@ -5784,7 +5793,7 @@ function viewCompanies(){
     <div style="overflow-x:auto;"><table><thead><tr><th>Company</th><th>Status</th><th>Validity</th><th>Created</th><th></th></tr></thead><tbody>
     ${list.map(c=>{ const on = c.active!==false; return `
       <tr>
-        <td><div style="display:flex;align-items:center;gap:10px;"><span class="avatar">${esc((c.name||'?')[0].toUpperCase())}</span><strong>${esc(c.name)}</strong></div></td>
+        <td><div style="display:flex;align-items:center;gap:10px;"><span class="avatar">${esc((c.name||'?')[0].toUpperCase())}</span><strong>${esc(c.name)}</strong>${c.businessType==='medicine'?' <span style="font-size:10.5px;font-weight:700;color:#fff;background:#0f8f6b;padding:1px 7px;border-radius:9px;">Medicine</span>':''}</div></td>
         <td><span class="pill ${on?'good':'bad'}">${on?'Active':'Suspended'}</span></td>
         <td>${validityPill(c)}${c.validUntil?`<div style="font-size:11px;color:var(--ink-soft);margin-top:3px;">till ${fmtDate(c.validUntil)}</div>`:''}</td>
         <td>${c.createdAt?fmtDate(c.createdAt):'-'}</td>
@@ -5845,7 +5854,8 @@ function checkNewUser(user, pw){
 
 function newCompanyModal(){
   formModal('New Company', [
-    { id:'name', label:'Company name', ph:'e.g. Sharma Mobiles' },
+    { id:'name', label:'Company name', ph:'e.g. Sharma Mobiles / City Medicos' },
+    { id:'btype', label:'Business type', type:'select', options:[['it','IT / CD / Mobility (mobile, computer, accessories)'],['medicine','Medicine / Pharmacy (batch, lot, expiry, MRP, discount %)']] },
     { id:'user', label:'Company admin username', ph:'e.g. sharma' },
     { id:'pw', label:'Company admin password', ph:`Min ${MIN_PW} characters` },
     { id:'valid', label:'Valid until (optional — leave empty for no expiry)', type:'date' },
@@ -5861,9 +5871,10 @@ function newCompanyModal(){
       if((await getDoc(companyRef(id))).exists()) throw new Error('A company with this name already exists. Use a different name.');
       const st = JSON.parse(JSON.stringify(DEFAULT_STATE));
       st.company.name = name;
+      st.company.businessType = (v.btype==='medicine') ? 'medicine' : 'it';
       st.users = [{ username:user, passHash: await hashPw(id, user, v.pw), role:'admin', owner:true, createdAt:todayISO(), createdBy:currentUser.username }];
       await setDoc(companyRef(id), st);
-      await mutatePlatform(p=>p.companies.push(Object.assign({ id, name, createdAt:todayISO(), active:true, createdBy:currentUser.username }, v.valid ? { validUntil:v.valid } : {})));
+      await mutatePlatform(p=>p.companies.push(Object.assign({ id, name, businessType:((v.btype==='medicine')?'medicine':'it'), createdAt:todayISO(), active:true, createdBy:currentUser.username }, v.valid ? { validUntil:v.valid } : {})));
     }catch(e){ releaseUsername(user, id); throw e; }
     closeModal(); render();
   });
@@ -6141,6 +6152,786 @@ if('serviceWorker' in navigator){
 if('caches' in window){
   caches.keys().then(keys=>keys.forEach(k=>caches.delete(k))).catch(()=>{});
 }
+
+/* =========================================================
+   MEDICINE / PHARMACY BILLING MODULE
+   Enabled when company.businessType === 'medicine'
+   Data lives in state.med  (items, batches, purchases, sales)
+   Stock is always derived:  batch stock = received (+free) - sold
+   ========================================================= */
+const MED_NAV = [
+  { id:'dashboard',  label:'Dashboard',               ic:'&#9646;' },
+  { id:'meddash',    label:'Overview',                ic:'&#128200;' },
+  { id:'medbill',    label:'Medicine Billing',        ic:'&#128138;' },
+  { id:'medbills',   label:'Saved Bills',             ic:'&#128196;' },
+  { id:'medpurchase',label:'Purchase / Batch Entry',  ic:'&#128230;' },
+  { id:'medstock',   label:'Medicines & Stock',       ic:'&#128717;' },
+  { id:'medexpiry',  label:'Expiry & Alerts',         ic:'&#9888;' },
+  { id:'medreports', label:'Reports & GST',           ic:'&#128202;' },
+  { id:'users',      label:'Users',                   ic:'&#128100;', adminOnly:true },
+  { id:'backup',     label:'Backup & Restore',        ic:'&#128190;', adminOnly:true },
+  { id:'company',    label:'Company Setup',           ic:'&#9881;',   adminOnly:true },
+];
+const MED_REDIRECT = { products:'medstock', purchase:'medpurchase', sales:'medbill', reports:'medreports', ledger:'medbills', imei:'medstock', overview:'meddash' };
+const MED_GST = [0,5,12,18,28];
+const MED_SCHEDULES = ['OTC / General','Schedule H','Schedule H1','Schedule X','Narcotic','Ayurvedic','Surgical / Device'];
+const MED_UNITS = ['Strip','Bottle','Vial','Tube','Box','Sachet','Pcs','Packet'];
+
+var medEditId = null;
+function isMedSale(s){ return !!(s && (s.isMed || (s.items && s.items[0] && s.items[0].batchId))); }
+function medTabGuard(){ if(medEditId && activeTab!=='medbill'){ medEditId = null; medDraft = null; } }
+function medQtyStr(q, md){
+  q = Math.round((Number(q)||0)*1e6)/1e6;
+  if(md && md.allowLoose && Number(md.perPack)>1){
+    let packs = Math.floor(q+1e-9), loose = Math.round((q-packs)*md.perPack);
+    if(loose>=md.perPack){ packs++; loose = 0; }
+    return loose ? (packs+' + '+loose+' '+(md.looseUnit||'loose')) : String(packs);
+  }
+  return String(Math.round(q*100)/100);
+}
+function isMedCo(){ return !!(state && state.company && state.company.businessType==='medicine'); }
+function medEnsure(){
+  const m = state.med = state.med || {};
+  ['items','batches','purchases','sales'].forEach(k=>{ if(!Array.isArray(m[k])) m[k] = []; });
+  m.counters = m.counters || {};
+  if(!m.counters.invoice) m.counters.invoice = 1;
+  if(!m.counters.purchase) m.counters.purchase = 1;
+  return m;
+}
+const r2 = n => Math.round((Number(n)||0)*100)/100;
+function medById(id){ return medEnsure().items.find(x=>x.id===id); }
+function medBatchById(id){ return medEnsure().batches.find(x=>x.id===id); }
+function medParseExp(s){
+  s = (s||'').trim(); let m, y, mo;
+  if((m = s.match(/^(\d{4})-(\d{1,2})$/))){ y = m[1]; mo = m[2]; }
+  else if((m = s.match(/^(\d{1,2})[\/\-. ](\d{4}|\d{2})$/))){ mo = m[1]; y = m[2].length===2 ? '20'+m[2] : m[2]; }
+  else return '';
+  mo = Number(mo); if(mo<1 || mo>12) return '';
+  return y + '-' + String(mo).padStart(2,'0');
+}
+function medFmtExp(ym){ if(!ym) return ''; const p = ym.split('-'); return p[1] + '/' + p[0]; }
+function medExpDays(ym){
+  if(!ym) return 99999;
+  const p = ym.split('-'), end = new Date(Number(p[0]), Number(p[1]), 0);
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((end - t) / 86400000);
+}
+function medSoldMap(excl){
+  if(excl===undefined) excl = medEditId;     // while an admin edits a bill, that bill's own quantities are not counted as sold
+  const mp = {};
+  medEnsure().sales.forEach(s=>{ if(excl && s.id===excl) return; s.items.forEach(it=>{ mp[it.batchId] = (mp[it.batchId]||0) + (Number(it.packQty!=null ? it.packQty : it.qty)||0); }); });
+  return mp;
+}
+function medBatchStock(b, mp){ mp = mp || medSoldMap(); return Math.round(((Number(b.qty)||0) + (Number(b.free)||0) - (mp[b.id]||0))*1e6)/1e6; }
+function medBatchesFor(medId){
+  return medEnsure().batches.filter(b=>b.medId===medId).sort((a,b)=> (a.exp||'').localeCompare(b.exp||''));
+}
+function medStockOf(medId, mp){
+  mp = mp || medSoldMap(); let total = 0, sellable = 0, nearest = '';
+  medBatchesFor(medId).forEach(b=>{
+    const st = medBatchStock(b, mp); if(st<=0) return;
+    total += st;
+    if(medExpDays(b.exp) >= 0){ sellable += st; if(!nearest) nearest = b.exp; }
+  });
+  return { total, sellable, nearest };
+}
+function medLine(qty, mrp, disc, gst){
+  qty = Number(qty)||0; mrp = Number(mrp)||0; gst = Number(gst)||0;
+  disc = Math.min(100, Math.max(0, Number(disc)||0));
+  const gross = qty*mrp, dAmt = gross*disc/100, net = gross - dAmt, taxable = net/(1+gst/100);
+  return { gross, dAmt, net, taxable, tax: net - taxable };
+}
+function medStatusPill(d, st){
+  let t, c;
+  if(st<=0){ t='Out of stock'; c='#64748b'; }
+  else if(d<0){ t='EXPIRED'; c='#c0392b'; }
+  else if(d<=30){ t='≤30 days'; c='#c0392b'; }
+  else if(d<=90){ t='≤90 days'; c='#a56a00'; }
+  else { t='OK'; c='#1a7f4b'; }
+  return `<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;color:#fff;background:${c};">${t}</span>`;
+}
+function medCsv(name, rows){
+  const csv = rows.map(r=> r.map(v=>{ v = (v==null?'':String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv'}));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function medKpi(l, v, c){ return `<div class="kpi ${c||''}"><div class="label">${l}</div><div class="value">${v}</div></div>`; }
+function medNextInvoice(){ return 'MB-' + String(medEnsure().counters.invoice).padStart(4,'0'); }
+function medNextPurchase(){ return 'MP-' + String(medEnsure().counters.purchase).padStart(4,'0'); }
+function medSaleDue(s){ return r2((Number(s.total)||0) - (Number(s.paid)||0)); }
+
+(function medStyle(){
+  const st = document.createElement('style');
+  st.textContent = `
+  .mrow{display:grid;grid-template-columns:minmax(150px,2.3fr) minmax(190px,2.5fr) 66px 84px 86px 66px 78px 96px 30px;gap:6px;align-items:center;margin-bottom:2px;}
+  .mhead{font-size:11px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+  .mhint{font-size:11.5px;margin:0 0 10px 2px;color:var(--ink-soft);}
+  .mwarn{color:#a56a00;font-weight:600;} .mbad{color:var(--bad);font-weight:600;}
+  .mprow{display:grid;grid-template-columns:minmax(150px,2fr) 100px 90px 70px 60px 90px 90px 80px 30px;gap:6px;align-items:center;margin-bottom:4px;}
+  .mprow2{display:grid;grid-template-columns:110px 100px 100px 90px;gap:6px;margin:0 0 10px 0;}
+  .msum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:14px;}
+  .msum>div{background:#f5f8fc;border:1px solid #dbe6f2;padding:8px 10px;border-radius:6px;}
+  .msum .l{font-size:11px;color:var(--ink-soft);} .msum .v{font-size:16px;font-weight:700;}
+  .mtabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+  @media(max-width:900px){.mrow,.mprow{grid-template-columns:1fr 1fr;}.mhead{display:none;}.mprow2{grid-template-columns:1fr 1fr;}}
+  `;
+  document.head.appendChild(st);
+})();
+
+/* ---------- Overview ---------- */
+function medViewDash(){
+  const m = medEnsure(), mp = medSoldMap(), today = todayISO(), month = today.slice(0,7);
+  let todaySales = 0, monthSales = 0, dues = 0;
+  m.sales.forEach(s=>{ if(s.date===today) todaySales += s.total; if(s.date.slice(0,7)===month) monthSales += s.total; dues += Math.max(0, medSaleDue(s)); });
+  let costVal = 0, mrpVal = 0, expired = 0, near = 0;
+  const alertB = [];
+  m.batches.forEach(b=>{
+    const st = medBatchStock(b, mp); if(st<=0) return;
+    const d = medExpDays(b.exp); costVal += st*(Number(b.rate)||0); mrpVal += st*(Number(b.mrp)||0);
+    if(d<0) expired++; else if(d<=90) near++;
+    if(d<=90) alertB.push({b, st, d});
+  });
+  alertB.sort((a,b)=> a.d-b.d);
+  const low = m.items.filter(x=>{ const s = medStockOf(x.id, mp); return (Number(x.minStock)||0) > 0 && s.sellable <= Number(x.minStock); });
+  const recent = [...m.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo)).slice(0,6);
+  return `
+  <div class="pagehead"><div><h1>Pharmacy Overview</h1><div class="desc">${esc(state.company.name||'')}</div></div>
+    <div><button class="btn primary" data-med="goto" data-tab="medbill">+ New Bill</button></div></div>
+  <div class="kpis">
+    ${medKpi("Today's sales", money(todaySales), 'good')}${medKpi('This month', money(monthSales), 'info')}
+    ${medKpi('Stock value (cost)', money(costVal))}${medKpi('Stock value (MRP)', money(mrpVal))}
+    ${medKpi('Expired batches in stock', expired, expired?'bad':'')}${medKpi('Expiring ≤ 90 days', near, near?'bad':'')}
+    ${medKpi('Low-stock medicines', low.length, low.length?'bad':'')}${medKpi('Customer dues', money(dues), dues?'bad':'')}
+  </div>
+  <div class="grid cols-2">
+    <div class="card"><h2>Expiry alerts</h2>
+      ${alertB.length===0 ? emptyState('Nothing expiring soon','Batches expired or expiring within 90 days appear here.') : `
+      <div style="overflow:auto;"><table><thead><tr><th>Medicine</th><th>Batch</th><th>Exp</th><th class="num">Stock</th><th>Status</th></tr></thead><tbody>
+      ${alertB.slice(0,10).map(x=>{ const md = medById(x.b.medId)||{}; return `<tr><td>${esc(md.name||'?')}</td><td>${esc(x.b.batch)}</td><td>${medFmtExp(x.b.exp)}</td><td class="num">${medQtyStr(x.st,md)}</td><td>${medStatusPill(x.d,x.st)}</td></tr>`; }).join('')}
+      </tbody></table></div>`}
+    </div>
+    <div class="card"><h2>Low stock</h2>
+      ${low.length===0 ? emptyState('Stock levels are fine','Set a "minimum stock" on a medicine to get alerts here.') : `
+      <table><thead><tr><th>Medicine</th><th class="num">Sellable</th><th class="num">Min</th></tr></thead><tbody>
+      ${low.slice(0,10).map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${medStockOf(x.id,mp).sellable}</td><td class="num">${x.minStock}</td></tr>`).join('')}
+      </tbody></table>`}
+    </div>
+  </div>
+  <div class="card"><h2>Recent bills</h2>
+    ${recent.length===0 ? emptyState('No bills yet','Create your first medicine bill.') : `
+    <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+    ${recent.map(s=>`<tr><td>${fmtDate(s.date)}</td><td class="num">${esc(s.invoiceNo)}</td><td>${esc(s.customer||'Walk-in')}</td><td class="num">${money(s.total)}</td><td>${dueStatusPill(medSaleDue(s))}</td></tr>`).join('')}
+    </tbody></table>`}
+  </div>`;
+}
+
+/* ---------- Medicines & stock ---------- */
+let medStockTab = 'meds';
+function medViewStock(){
+  const m = medEnsure(), mp = medSoldMap();
+  const tabs = `<div class="mtabs"><button class="btn sm ${medStockTab==='meds'?'primary':''}" data-med="stock-tab" data-v="meds">Medicines</button><button class="btn sm ${medStockTab==='batches'?'primary':''}" data-med="stock-tab" data-v="batches">Batch-wise stock</button></div>`;
+  let body;
+  if(medStockTab==='meds'){
+    const list = [...m.items].sort((a,b)=> a.name.localeCompare(b.name));
+    body = list.length===0 ? emptyState('No medicines yet','Click "+ Add Medicine", or just add stock from Purchase / Batch Entry (new medicines are created automatically).') : `
+    <input type="text" placeholder="Search medicine, salt, manufacturer..." autocomplete="off" style="margin-bottom:10px;" oninput="var q=this.value.toLowerCase().trim();document.querySelectorAll('#med-list-body tr').forEach(function(r){r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)>-1)?'':'none';});">
+    <div style="max-height:70vh;overflow:auto;"><table><thead><tr><th>Medicine</th><th>Pack</th><th>Schedule</th><th class="num">GST</th><th class="num">MRP</th><th class="num">Stock</th><th>Nearest exp.</th><th></th></tr></thead><tbody id="med-list-body">
+    ${list.map(x=>{ const s = medStockOf(x.id, mp); const nb = medBatchesFor(x.id).length; const lowF = (Number(x.minStock)||0)>0 && s.sellable <= Number(x.minStock);
+      return `<tr><td><strong>${esc(x.name)}</strong>${x.generic?`<div style="font-size:11px;color:var(--ink-soft);">${esc(x.generic)}</div>`:''}${x.mfr?`<div style="font-size:11px;color:var(--ink-soft);">${esc(x.mfr)}</div>`:''}</td>
+      <td>${esc(x.pack||'')} ${esc(x.unit||'')}</td><td>${esc(x.schedule||'')}</td><td class="num">${x.gst}%</td><td class="num">${money(x.mrp)}</td>
+      <td class="num" style="${lowF?'color:var(--bad);font-weight:700;':''}">${medQtyStr(s.sellable,x)}${Math.abs(s.total-s.sellable)>1e-9?`<div style="font-size:10.5px;color:var(--bad);">+${medQtyStr(s.total-s.sellable,x)} expired</div>`:''}</td>
+      <td>${s.nearest?medFmtExp(s.nearest):'-'}</td>
+      <td style="text-align:right;white-space:nowrap;"><button class="btn sm" data-med="batches" data-id="${x.id}">Batches (${nb})</button>
+      ${isAdmin()?` <button class="btn sm ghost" data-med="med-edit" data-id="${x.id}">Edit</button> <button class="btn sm danger" data-med="med-del" data-id="${x.id}">Delete</button>`:''}</td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  } else {
+    const rows = m.batches.map(b=>({b, st:medBatchStock(b,mp), d:medExpDays(b.exp), md:medById(b.medId)||{name:'?'}}))
+      .sort((x,y)=> x.md.name.localeCompare(y.md.name) || (x.b.exp||'').localeCompare(y.b.exp||''));
+    body = rows.length===0 ? emptyState('No batches yet','Batches are created from Purchase / Batch Entry.') : `
+    <div style="margin-bottom:10px;"><button class="btn sm" data-med="csv-stock">&#8681; Export CSV</button></div>
+    <div style="max-height:70vh;overflow:auto;"><table><thead><tr><th>Medicine</th><th>Batch</th><th>Lot</th><th>Mfg</th><th>Expiry</th><th class="num">Stock</th><th class="num">Cost</th><th class="num">MRP</th><th>Status</th></tr></thead><tbody>
+    ${rows.map(x=>`<tr><td>${esc(x.md.name)}</td><td>${esc(x.b.batch)}</td><td>${esc(x.b.lot||'')}</td><td>${medFmtExp(x.b.mfg)}</td><td>${medFmtExp(x.b.exp)}</td><td class="num">${medQtyStr(x.st,x.md)}</td><td class="num">${money(x.b.rate)}</td><td class="num">${money(x.b.mrp)}</td><td>${medStatusPill(x.d,x.st)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  }
+  return `<div class="pagehead"><div><h1>Medicines & Stock</h1><div class="desc">Medicine master with batch-wise stock</div></div>
+    ${isAdmin()?`<div><button class="btn primary" data-med="med-new">+ Add Medicine</button></div>`:''}</div>
+    <div class="card">${tabs}${body}</div>`;
+}
+function medFormModal(x){
+  x = x || {};
+  const sel = (id, arr, cur)=> `<select id="${id}">${arr.map(o=>`<option ${String(o)===String(cur)?'selected':''}>${o}</option>`).join('')}</select>`;
+  openModal(`<div class="modal-bg" data-close="modal"><div class="modal" data-stop>
+    <div class="modal-head"><h2>${x.id?'Edit':'Add'} Medicine</h2><button class="modal-close" data-close="modal">&times;</button></div>
+    <div class="field"><label>Medicine name *</label><input type="text" id="mm-name" value="${esc(x.name||'')}" placeholder="e.g. Paracetamol 500mg Tab"></div>
+    <div class="grid cols-2">
+      <div class="field"><label>Generic / Salt</label><input type="text" id="mm-generic" value="${esc(x.generic||'')}"></div>
+      <div class="field"><label>Manufacturer / Company</label><input type="text" id="mm-mfr" value="${esc(x.mfr||'')}"></div>
+      <div class="field"><label>HSN code</label><input type="text" id="mm-hsn" value="${esc(x.hsn||'3004')}"></div>
+      <div class="field"><label>Pack size</label><input type="text" id="mm-pack" value="${esc(x.pack||'')}" placeholder="e.g. 10 Tab"></div>
+      <div class="field"><label>Selling unit</label>${sel('mm-unit',MED_UNITS,x.unit||'Strip')}</div>
+      <div class="field"><label>Schedule / type</label>${sel('mm-sched',MED_SCHEDULES,x.schedule||MED_SCHEDULES[0])}</div>
+      <div class="field"><label>GST %</label>${sel('mm-gst',MED_GST,x.gst!=null?x.gst:12)}</div>
+      <div class="field"><label>Default MRP (₹)</label><input type="number" id="mm-mrp" value="${x.mrp||''}" min="0" step="0.01"></div>
+      <div class="field"><label>Default discount %</label><input type="number" id="mm-disc" value="${x.defDisc||0}" min="0" max="100" step="0.01"></div>
+      <div class="field"><label>Minimum stock alert (packs)</label><input type="number" id="mm-min" value="${x.minStock||0}" min="0"></div>
+    </div>
+    <h3 style="margin-top:6px;">Loose sale (optional)</h3>
+    <div class="grid cols-3">
+      <div class="field"><label>Allow loose (single tablet / unit) sale?</label>${sel('mm-loose',['No','Yes'],x.allowLoose?'Yes':'No')}</div>
+      <div class="field"><label>Units in one pack</label><input type="number" id="mm-perpack" value="${x.perPack||''}" min="1" placeholder="e.g. 10"></div>
+      <div class="field"><label>Loose unit name</label><input type="text" id="mm-lunit" value="${esc(x.looseUnit||'Tab')}" placeholder="Tab / Cap / ml"></div>
+    </div>
+    <div class="field"><label>Rack / shelf location</label><input type="text" id="mm-rack" value="${esc(x.rack||'')}"></div>
+    <div style="text-align:right;margin-top:8px;"><button class="btn ghost" data-close="modal">Cancel</button> <button class="btn primary" data-med="med-save" data-id="${x.id||''}">Save Medicine</button></div>
+  </div></div>`);
+}
+function medBatchesModal(medId){
+  const md = medById(medId); if(!md) return;
+  const mp = medSoldMap(), list = medBatchesFor(medId);
+  openModal(`<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:860px;">
+    <div class="modal-head"><h2>${esc(md.name)} — Batches</h2><button class="modal-close" data-close="modal">&times;</button></div>
+    ${list.length===0?'<div class="desc" style="margin:8px 0;">No batches yet.</div>':`
+    <div style="overflow:auto;"><table><thead><tr><th>Batch</th><th>Lot</th><th>Mfg</th><th>Expiry</th><th class="num">Received</th><th class="num">Sold</th><th class="num">Stock</th><th class="num">MRP</th><th>Status</th><th></th></tr></thead><tbody>
+    ${list.map(b=>{ const st = medBatchStock(b,mp), sold = mp[b.id]||0; return `<tr><td>${esc(b.batch)}</td><td>${esc(b.lot||'')}</td><td>${medFmtExp(b.mfg)}</td><td>${medFmtExp(b.exp)}</td><td class="num">${(Number(b.qty)||0)+(Number(b.free)||0)}</td><td class="num">${medQtyStr(sold,md)}</td><td class="num">${medQtyStr(st,md)}</td><td class="num">${money(b.mrp)}</td><td>${medStatusPill(medExpDays(b.exp),st)}</td>
+      <td style="white-space:nowrap;text-align:right;">${isAdmin()?`<button class="btn sm ghost" data-med="batch-mrp" data-id="${b.id}" data-med-id="${medId}">MRP</button> <button class="btn sm danger" data-med="batch-del" data-id="${b.id}" data-med-id="${medId}" ${sold?'disabled title="Already sold from this batch"':''}>&times;</button>`:''}</td></tr>`; }).join('')}
+    </tbody></table></div>`}
+    ${isAdmin()?`<h3 style="margin-top:14px;">Add opening stock / new batch</h3>
+    <div class="grid cols-4">
+      <div class="field"><label>Batch no. *</label><input type="text" id="ba-batch"></div>
+      <div class="field"><label>Lot no.</label><input type="text" id="ba-lot"></div>
+      <div class="field"><label>Mfg (MM/YYYY)</label><input type="text" id="ba-mfg" placeholder="03/2025"></div>
+      <div class="field"><label>Expiry (MM/YYYY) *</label><input type="text" id="ba-exp" placeholder="02/2027"></div>
+      <div class="field"><label>Qty *</label><input type="number" id="ba-qty" min="0"></div>
+      <div class="field"><label>Free qty</label><input type="number" id="ba-free" min="0" value="0"></div>
+      <div class="field"><label>Purchase rate ₹ (ex-GST)</label><input type="number" id="ba-rate" min="0" step="0.01"></div>
+      <div class="field"><label>MRP ₹ *</label><input type="number" id="ba-mrp" min="0" step="0.01" value="${md.mrp||''}"></div>
+    </div>
+    <div style="text-align:right;"><button class="btn primary" data-med="batch-add" data-id="${medId}">Add Batch</button></div>`:''}
+  </div></div>`);
+}
+
+/* ---------- Purchase / batch entry ---------- */
+let medPur = null;
+function medNewPurRow(){ return { name:'', batch:'', lot:'', mfg:'', exp:'', qty:'', free:0, rate:'', mrp:'', gst:12, hsn:'3004', pack:'' }; }
+function medPurTotals(d){
+  let taxable = 0, gst = 0;
+  d.items.forEach(r=>{ const b = (Number(r.qty)||0)*(Number(r.rate)||0); taxable += b; gst += b*(Number(r.gst)||0)/100; });
+  return { taxable, gst, total: Math.round(taxable+gst), exact: taxable+gst };
+}
+function medPurRowHtml(r,i){
+  const num = (k,w,ph,step)=> `<input type="number" id="mp-${k}-${i}" data-mf="p-row" data-k="${k}" data-i="${i}" value="${esc(r[k])}" placeholder="${ph}" min="0" step="${step||'any'}">`;
+  const txt = (k,ph)=> `<input type="text" id="mp-${k}-${i}" data-mf="p-row" data-k="${k}" data-i="${i}" value="${esc(r[k])}" placeholder="${ph}" autocomplete="off">`;
+  return `<div class="mprow">
+    <input type="text" id="mp-name-${i}" data-mf="p-name" data-i="${i}" list="mp-meds" value="${esc(r.name)}" placeholder="Medicine name" autocomplete="off">
+    ${txt('batch','Batch *')}${txt('exp','Exp MM/YYYY *')}${num('qty',0,'Qty *')}${num('free',0,'Free')}${num('rate',0,'Rate ex-GST')}${num('mrp',0,'MRP *')}
+    <select id="mp-gst-${i}" data-mf="p-row" data-k="gst" data-i="${i}">${MED_GST.map(g=>`<option value="${g}" ${Number(r.gst)===g?'selected':''}>${g}%</option>`).join('')}</select>
+    <button class="rm" data-med="p-rm-row" data-i="${i}" title="Remove">&times;</button>
+  </div>
+  <div class="mprow2">${txt('lot','Lot no.')}${txt('mfg','Mfg MM/YYYY')}${txt('hsn','HSN')}${txt('pack','Pack')}</div>`;
+}
+function medPurSumHtml(d){
+  const t = medPurTotals(d), paid = d.paid===''||d.paid==null ? 0 : Number(d.paid)||0;
+  return `<div><div class="l">Taxable value</div><div class="v">${money(t.taxable)}</div></div><div><div class="l">GST</div><div class="v">${money(t.gst)}</div></div>
+  <div><div class="l">Invoice total</div><div class="v">${money(t.total)}</div></div><div><div class="l">Balance to pay</div><div class="v" style="color:var(--bad);">${money(Math.max(0,t.total-paid))}</div></div>`;
+}
+function medViewPurchase(){
+  const m = medEnsure();
+  if(!medPur) medPur = { date:todayISO(), supplier:'', invNo:'', paid:'', items:[medNewPurRow()] };
+  const d = medPur;
+  const recent = [...m.purchases].sort((a,b)=> b.date.localeCompare(a.date) || b.no.localeCompare(a.no));
+  return `<div class="pagehead"><div><h1>Purchase / Batch Entry</h1><div class="desc">Every line creates a batch with its own expiry, MRP and stock</div></div></div>
+  <div class="card">
+    <div class="grid cols-3">
+      <div class="field"><label>Supplier / Distributor</label><input type="text" id="mp-sup" data-mf="p-sup" list="mp-suplist" value="${esc(d.supplier)}" autocomplete="off"></div>
+      <div class="field"><label>Supplier invoice no.</label><input type="text" id="mp-inv" data-mf="p-inv" value="${esc(d.invNo)}"></div>
+      <div class="field"><label>Purchase date</label><input type="date" id="mp-date" data-mf="p-date" value="${d.date}"></div>
+    </div>
+    <datalist id="mp-suplist">${[...new Set(m.purchases.map(p=>p.supplier).filter(Boolean))].map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+    <datalist id="mp-meds">${m.items.map(x=>`<option value="${esc(x.name)}">`).join('')}</datalist>
+    <h3>Medicines received</h3>
+    <div class="mhint">Type a new medicine name to create it automatically. Expiry format: MM/YYYY (e.g. 08/2027).</div>
+    <div id="mp-rows">${d.items.map((r,i)=>medPurRowHtml(r,i)).join('')}</div>
+    <button class="btn sm ghost" data-med="p-add-row">+ Add medicine</button>
+    <div class="grid cols-3" style="margin-top:14px;"><div class="field"><label>Amount paid to supplier (₹)</label><input type="number" id="mp-paid" data-mf="p-paid" value="${esc(d.paid)}" placeholder="0"></div></div>
+    <div class="msum" id="mp-sum">${medPurSumHtml(d)}</div>
+    <div style="margin-top:14px;"><button class="btn primary" data-med="p-save">Save Purchase &amp; Add Stock</button></div>
+  </div>
+  <div class="card"><h2>Purchase history (${recent.length})</h2>
+    ${recent.length===0 ? emptyState('No purchases yet','Saved purchases are listed here.') : `
+    <div style="max-height:60vh;overflow:auto;"><table><thead><tr><th>Date</th><th>No.</th><th>Supplier</th><th>Inv.</th><th>Items</th><th class="num">Total</th><th class="num">Paid</th><th></th></tr></thead><tbody>
+    ${recent.map(p=>`<tr><td>${fmtDate(p.date)}</td><td class="num">${esc(p.no)}</td><td>${esc(p.supplier||'-')}</td><td>${esc(p.invNo||'')}</td>
+      <td style="font-size:12px;">${p.items.map(it=>esc(it.name)+' ('+esc(it.batch)+') ×'+it.qty).join('<br>')}</td>
+      <td class="num">${money(p.total)}</td><td class="num">${money(p.paid)}</td>
+      <td style="text-align:right;">${isAdmin()?`<button class="btn sm danger" data-med="p-del" data-id="${p.id}">Delete</button>`:''}</td></tr>`).join('')}
+    </tbody></table></div>`}
+  </div>`;
+}
+function medSavePurchase(){
+  const m = medEnsure(), d = medPur;
+  const rows = d.items.filter(r=> (r.name||'').trim() || r.batch || r.qty);
+  if(rows.length===0){ alert('Add at least one medicine.'); return; }
+  const prepared = [];
+  for(let i=0;i<rows.length;i++){
+    const r = rows[i], n = i+1;
+    if(!(r.name||'').trim()){ alert('Row '+n+': enter the medicine name.'); return; }
+    if(!(r.batch||'').trim()){ alert('Row '+n+': batch number is required.'); return; }
+    const exp = medParseExp(r.exp); if(!exp){ alert('Row '+n+': enter expiry as MM/YYYY (e.g. 08/2027).'); return; }
+    let mfg = ''; if((r.mfg||'').trim()){ mfg = medParseExp(r.mfg); if(!mfg){ alert('Row '+n+': Mfg date must be MM/YYYY.'); return; } }
+    if(!(Number(r.qty)>0)){ alert('Row '+n+': quantity must be more than 0.'); return; }
+    if(!(Number(r.mrp)>0)){ alert('Row '+n+': enter the MRP.'); return; }
+    prepared.push({ r, exp, mfg });
+  }
+  const pid = uid('mpur'), items = [];
+  prepared.forEach(({r,exp,mfg})=>{
+    let md = m.items.find(x=> x.name.trim().toLowerCase()===r.name.trim().toLowerCase());
+    if(!md){
+      md = { id:uid('med'), name:r.name.trim(), generic:'', mfr:'', hsn:(r.hsn||'3004').trim(), pack:(r.pack||'').trim(), unit:'Strip', schedule:MED_SCHEDULES[0], gst:Number(r.gst)||0, mrp:Number(r.mrp)||0, defDisc:0, minStock:0, rack:'', perPack:(parseInt((r.pack||'').trim(),10)||0), looseUnit:((r.pack||'').replace(/^\s*\d+\s*/,'').trim()||'Tab'), allowLoose:false };
+      m.items.push(md);
+    }
+    const b = { id:uid('mb'), medId:md.id, batch:r.batch.trim(), lot:(r.lot||'').trim(), mfg, exp, qty:Number(r.qty)||0, free:Number(r.free)||0, rate:Number(r.rate)||0, mrp:Number(r.mrp)||0, purchaseId:pid, date:d.date, supplier:d.supplier||'' };
+    m.batches.push(b);
+    md.mrp = b.mrp;
+    items.push({ medId:md.id, batchId:b.id, name:md.name, batch:b.batch, qty:b.qty, free:b.free, rate:b.rate, gst:Number(r.gst)||0, mrp:b.mrp, exp });
+  });
+  const t = medPurTotals({ items: prepared.map(p=>p.r) });
+  m.purchases.push({ id:pid, no:medNextPurchase(), date:d.date, supplier:d.supplier||'', invNo:d.invNo||'', items, taxable:r2(t.taxable), gst:r2(t.gst), total:t.total, paid:Number(d.paid)||0 });
+  m.counters.purchase++;
+  medPur = null; saveState(); render();
+  alert('Purchase saved — stock added batch-wise.');
+}
+
+/* ---------- Billing ---------- */
+let medDraft = null;
+function medNewRow(){ return { medId:'', query:'', batchId:'', qty:1, mrp:0, disc:0, gst:12, loose:false }; }
+function medNewDraft(){ return { date:todayISO(), customer:'', phone:'', address:'', doctor:'', mode:'Cash', paid:'', billDisc:'', items:[medNewRow()] }; }
+function medPickBatch(medId){
+  const mp = medSoldMap();
+  return medBatchesFor(medId).find(b=> medBatchStock(b,mp)>0 && medExpDays(b.exp)>=0) || null;   // FEFO: earliest expiry first
+}
+function medApplyMed(r, md){
+  r.medId = md.id; r.query = md.name; r.gst = md.gst;
+  const b = medPickBatch(md.id);
+  r.loose = false; r.batchId = b ? b.id : ''; r.mrp = b ? b.mrp : (md.mrp||0);
+  const bd = Number(medDraft.billDisc)||0; r.disc = bd || md.defDisc || 0;
+}
+function medDraftTotals(d){
+  let gross=0, disc=0, net=0, taxable=0, tax=0, qty=0;
+  d.items.forEach(r=>{ if(!r.medId||!r.batchId) return; const l = medLine(r.qty,r.mrp,r.disc,r.gst); gross+=l.gross; disc+=l.dAmt; net+=l.net; taxable+=l.taxable; tax+=l.tax; qty+=Number(r.qty)||0; });
+  const total = Math.round(net);
+  return { gross, disc, net, taxable, tax, qty, total, round: total-net };
+}
+function medPackQty(r, md){ const q = Number(r.qty)||0; return (r.loose && md && Number(md.perPack)>1) ? Math.round(q/md.perPack*1e6)/1e6 : q; }
+function medRowHint(r){
+  if(!r.medId) return (r.query||'').trim() ? `<span class="mbad">No medicine matches "${esc(r.query)}" — add it in Medicines & Stock.</span>` : '';
+  const b = medBatchById(r.batchId);
+  if(!b) return '<span class="mbad">No sellable batch in stock — add stock from Purchase / Batch Entry.</span>';
+  const md = medById(r.medId), st = medBatchStock(b), dd = medExpDays(b.exp), h = [];
+  const q = medPackQty(r, md);
+  h.push(`Batch ${esc(b.batch)}${b.lot?' · Lot '+esc(b.lot):''}${b.mfg?' · Mfg '+medFmtExp(b.mfg):''} · Exp ${medFmtExp(b.exp)}`);
+  if(dd<0) h.push('<span class="mbad">EXPIRED — cannot be sold</span>'); else if(dd<=90) h.push(`<span class="mwarn">expires in ${dd} days</span>`);
+  h.push(q>st+1e-9 ? `<span class="mbad">only ${medQtyStr(st,md)} in stock</span>` : `stock ${medQtyStr(st,md)}`);
+  if(r.loose && md) h.push(`loose price = MRP ₹${b.mrp} ÷ ${md.perPack}`);
+  return h.join(' · ');
+}
+function medRowHtml(r,i){
+  const md = medById(r.medId), mp = medSoldMap();
+  const opts = md ? medBatchesFor(md.id).map(b=>{
+    const st = medBatchStock(b,mp), dd = medExpDays(b.exp), dis = (st<=0||dd<0) && b.id!==r.batchId;
+    return `<option value="${b.id}" ${b.id===r.batchId?'selected':''} ${dis?'disabled':''}>${esc(b.batch)} · Exp ${medFmtExp(b.exp)} · Stk ${medQtyStr(st,md)} · ₹${b.mrp}${dd<0?' · EXPIRED':''}</option>`;
+  }).join('') : '';
+  const l = medLine(r.qty,r.mrp,r.disc,r.gst);
+  return `<div class="mrow">
+    <input type="text" id="mb-q-${i}" data-mf="b-q" data-i="${i}" list="mb-meds" value="${esc(r.query)}" placeholder="Search medicine…" autocomplete="off">
+    <select id="mb-batch-${i}" data-mf="b-batch" data-i="${i}"><option value="">— batch —</option>${opts}</select>
+    <input type="number" id="mb-qty-${i}" data-mf="b-num" data-k="qty" data-i="${i}" value="${r.qty}" min="1">
+    <select id="mb-unit-${i}" data-mf="b-unit" data-i="${i}" ${md&&md.allowLoose?'':'disabled'}><option value="pack">${esc((md&&md.unit)||'Pack')}</option>${md&&md.allowLoose?`<option value="loose" ${r.loose?'selected':''}>${esc(md.looseUnit||'Loose')} (loose)</option>`:''}</select>
+    <input type="number" id="mb-mrp-${i}" data-mf="b-num" data-k="mrp" data-i="${i}" value="${r.mrp}" min="0" step="0.01">
+    <input type="number" id="mb-disc-${i}" data-mf="b-num" data-k="disc" data-i="${i}" value="${r.disc}" min="0" max="100" step="0.01">
+    <select id="mb-gst-${i}" data-mf="b-num" data-k="gst" data-i="${i}">${MED_GST.map(g=>`<option value="${g}" ${Number(r.gst)===g?'selected':''}>${g}%</option>`).join('')}</select>
+    <div class="num" id="mb-amt-${i}" style="font-weight:600;">${money(l.net)}</div>
+    <button class="rm" data-med="b-rm-row" data-i="${i}" title="Remove">&times;</button>
+  </div><div class="mhint" id="mb-hint-${i}">${medRowHint(r)}</div>`;
+}
+function medBillPaid(d, total){ return d.paid==='' || d.paid==null ? (d.mode==='Credit / Due' ? 0 : total) : (Number(d.paid)||0); }
+function medBillSumHtml(d){
+  const t = medDraftTotals(d), paid = medBillPaid(d, t.total), due = Math.max(0, t.total - paid);
+  return `<div><div class="l">Items / Qty</div><div class="v">${d.items.filter(r=>r.medId&&r.batchId).length} / ${t.qty}</div></div>
+  <div><div class="l">MRP total</div><div class="v">${money(t.gross)}</div></div>
+  <div><div class="l">Discount</div><div class="v" style="color:var(--good);">- ${money(t.disc)}</div></div>
+  <div><div class="l">Taxable value</div><div class="v">${money(t.taxable)}</div></div>
+  <div><div class="l">GST (incl.)</div><div class="v">${money(t.tax)}</div></div>
+  <div><div class="l">Round off</div><div class="v">${t.round>=0?'+':'-'} ${money(Math.abs(t.round))}</div></div>
+  <div style="background:#e8f3ff;border-color:#9fc5ee;"><div class="l">NET PAYABLE</div><div class="v" style="font-size:20px;">${money(t.total)}</div></div>
+  <div><div class="l">Due</div><div class="v" style="color:${due>0?'var(--bad)':'inherit'};">${money(due)}</div></div>`;
+}
+function medViewBill(){
+  const m = medEnsure(); if(!medDraft) medDraft = medNewDraft(); const d = medDraft;
+  const seen = {}, custs = [];
+  [...m.sales].reverse().forEach(s=>{ const k = (s.phone||s.customer||'').toLowerCase(); if(k && !seen[k]){ seen[k]=1; custs.push(s); } });
+  const editing = !!d.editId;
+  return `<div class="pagehead"><div><h1>${editing?'Edit Bill '+esc(d.invoiceNo):'Medicine Billing'}</h1><div class="desc">MRP-based bill with batch, expiry and discount % · earliest-expiry batch is picked automatically</div></div></div>
+  ${editing?`<div class="card" style="background:#fff8e6;border-color:#f0d58a;"><strong>Editing saved bill ${esc(d.invoiceNo)}</strong> — admin only. The old quantities are returned to stock while you edit. <button class="btn sm" data-med="b-cancel-edit" style="margin-left:8px;">Cancel edit</button></div>`:''}
+  <div class="card">
+    <div class="grid cols-3">
+      <div class="field"><label>Customer / Patient</label><input type="text" id="mb-cust" data-mf="b-cust" list="mb-custlist" value="${esc(d.customer)}" placeholder="Walk-in customer" autocomplete="off"></div>
+      <div class="field"><label>Phone</label><input type="tel" id="mb-phone" data-mf="b-phone" value="${esc(d.phone)}" autocomplete="off"></div>
+      <div class="field"><label>Bill date</label><input type="date" id="mb-date" data-mf="b-date" value="${d.date}"></div>
+      <div class="field"><label>Doctor / Prescribed by</label><input type="text" id="mb-doc" data-mf="b-doc" value="${esc(d.doctor)}" placeholder="Dr. (optional)"></div>
+      <div class="field" style="grid-column:span 2;"><label>Address (optional)</label><input type="text" id="mb-addr" data-mf="b-addr" value="${esc(d.address)}"></div>
+    </div>
+    <datalist id="mb-custlist">${custs.map(s=>`<option value="${esc(s.customer||'')}">${esc(s.phone||'')}</option>`).join('')}</datalist>
+    <datalist id="mb-meds">${m.items.map(x=>{ const s = medStockOf(x.id); return `<option value="${esc(x.name)}">${esc((x.pack||'')+' · stock '+s.sellable)}</option>`; }).join('')}</datalist>
+    <h3 style="margin-top:6px;">Medicines</h3>
+    <div class="mrow mhead"><div>Medicine</div><div>Batch · Expiry · Stock</div><div>Qty</div><div>Unit</div><div>Rate ₹</div><div>Disc %</div><div>GST</div><div>Amount</div><div></div></div>
+    <div id="mb-rows">${d.items.map((r,i)=>medRowHtml(r,i)).join('')}</div>
+    <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-top:6px;">
+      <button class="btn sm ghost" data-med="b-add-row">+ Add medicine</button>
+      <div class="field" style="margin:0;"><label style="font-size:11px;">Bill discount % (all rows)</label>
+        <div style="display:flex;gap:6px;"><input type="number" id="mb-billdisc" data-mf="b-billdisc" value="${esc(d.billDisc)}" min="0" max="100" step="0.01" style="width:90px;"><button class="btn sm" data-med="b-apply-disc">Apply</button></div></div>
+    </div>
+    <div class="grid cols-4" style="margin-top:14px;">
+      <div class="field"><label>Payment mode</label><select id="mb-mode" data-mf="b-mode">${['Cash','UPI','Card','Credit / Due'].map(x=>`<option ${d.mode===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div class="field"><label>Amount received (₹) — blank = full</label><input type="number" id="mb-paid" data-mf="b-paid" value="${esc(d.paid)}" placeholder="full amount"></div>
+    </div>
+    <div class="msum" id="mb-sum">${medBillSumHtml(d)}</div>
+    <div style="margin-top:14px;display:flex;gap:8px;"><button class="btn primary" data-med="b-save">${editing?'Update Bill':'Generate Bill'}</button>${editing?'':'<button class="btn ghost" data-med="b-clear">Clear</button>'}</div>
+  </div>`;
+}
+function medRefreshBill(){
+  const d = medDraft; if(!d) return;
+  d.items.forEach((r,i)=>{
+    const a = document.getElementById('mb-amt-'+i); if(a) a.textContent = money(medLine(r.qty,r.mrp,r.disc,r.gst).net);
+    const h = document.getElementById('mb-hint-'+i); if(h) h.innerHTML = medRowHint(r);
+  });
+  const s = document.getElementById('mb-sum'); if(s) s.innerHTML = medBillSumHtml(d);
+}
+function medSaveBill(){
+  const m = medEnsure(), d = medDraft, editing = !!d.editId;
+  if(editing && !isAdmin()){ alert('Only the company admin can edit a saved bill.'); return; }
+  const old = editing ? m.sales.find(x=>x.id===d.editId) : null;
+  if(editing && !old){ alert('This bill no longer exists.'); medEditId = null; medDraft = null; render(); return; }
+  const rows = d.items.filter(r=> r.medId || (r.query||'').trim());
+  if(rows.length===0 || rows.some(r=>!r.medId)){ alert('Select a valid medicine in every row (or remove the empty rows).'); return; }
+  const used = {}, mp = medSoldMap(), items = [];
+  for(let i=0;i<rows.length;i++){
+    const r = rows[i], n = i+1, b = medBatchById(r.batchId), md = medById(r.medId);
+    if(!b){ alert('Row '+n+' ('+md.name+'): no batch selected / no stock available.'); return; }
+    if(medExpDays(b.exp)<0){ alert('Row '+n+' ('+md.name+'): batch '+b.batch+' is EXPIRED and cannot be sold.'); return; }
+    const q = Number(r.qty)||0; if(!(q>0)){ alert('Row '+n+': quantity must be at least 1.'); return; }
+    if(r.loose && !(md.allowLoose && md.perPack>1)){ alert('Row '+n+': loose sale is not enabled for '+md.name+'.'); return; }
+    if(!(Number(r.mrp)>0)){ alert('Row '+n+': enter the rate / MRP.'); return; }
+    const pq = medPackQty(r, md);
+    used[b.id] = (used[b.id]||0) + pq;
+    if(used[b.id] > medBatchStock(b,mp) + 1e-9){ alert('Row '+n+' ('+md.name+'): batch '+b.batch+' has only '+medQtyStr(medBatchStock(b,mp),md)+' in stock.'); return; }
+    const l = medLine(q, r.mrp, r.disc, r.gst);
+    items.push({ medId:md.id, batchId:b.id, name:md.name, hsn:md.hsn||'', pack:((md.pack||'')+' '+(md.unit||'')).trim(), batch:b.batch, lot:b.lot||'', mfg:b.mfg||'', exp:b.exp, mrp:Number(r.mrp), qty:q,
+      loose:!!r.loose, unitName: r.loose ? (md.looseUnit||'Loose') : '', perPack:Number(md.perPack)||0, packQty:pq,
+      disc:Math.min(100,Math.max(0,Number(r.disc)||0)), gst:Number(r.gst)||0, taxable:r2(l.taxable), tax:r2(l.tax), amount:r2(l.net), cost:Number(b.rate)||0 });
+  }
+  const t = medDraftTotals({ items: rows });
+  const paid = Math.min(t.total, medBillPaid(d, t.total));
+  const sale = { id: editing ? old.id : uid('msale'), invoiceNo: editing ? old.invoiceNo : medNextInvoice(), isMed:true, date:d.date||todayISO(), customer:(d.customer||'').trim(), phone:(d.phone||'').trim(), address:(d.address||'').trim(), doctor:(d.doctor||'').trim(),
+    mode:d.mode, items, gross:r2(t.gross), discount:r2(t.disc), taxable:r2(t.taxable), tax:r2(t.tax), roundOff:r2(t.round), total:t.total, paid:r2(paid), createdBy: editing ? old.createdBy : (currentUser?currentUser.username:'') };
+  if(editing){
+    sale.sigId = old.sigId; sale.editedBy = currentUser ? currentUser.username : ''; sale.editedAt = todayISO();
+    m.sales[m.sales.indexOf(old)] = sale; medEditId = null;
+  } else {
+    stampBillSignature(sale);
+    m.sales.push(sale); m.counters.invoice++;
+  }
+  medDraft = null; saveState(); render(); medPrintBill(sale.id);
+}
+
+/* ---------- Saved bills ---------- */
+function medViewBills(){
+  const m = medEnsure();
+  const list = [...m.sales].sort((a,b)=> b.date.localeCompare(a.date) || b.invoiceNo.localeCompare(a.invoiceNo));
+  const dues = list.reduce((a,s)=> a + Math.max(0, medSaleDue(s)), 0);
+  return `<div class="pagehead"><div><h1>Saved Bills</h1><div class="desc">Print, receive pending payments or delete (stock is restored automatically)</div></div></div>
+  <div class="kpis">${medKpi('Bills', list.length)}${medKpi('Total sales', money(list.reduce((a,s)=>a+s.total,0)),'info')}${medKpi('Pending dues', money(dues), dues?'bad':'good')}</div>
+  <div class="card">${list.length===0 ? emptyState('No bills yet','Bills you create will be listed here.') : `
+    <input type="text" placeholder="Search by invoice, customer, phone, medicine or date..." autocomplete="off" style="margin-bottom:10px;" oninput="var q=this.value.toLowerCase().trim();document.querySelectorAll('#med-bills-body tr').forEach(function(r){r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)>-1)?'':'none';});">
+    <div style="max-height:72vh;overflow:auto;"><table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Medicines</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody id="med-bills-body">
+    ${list.map(s=>`<tr><td>${fmtDate(s.date)}</td><td class="num">${esc(s.invoiceNo)}</td><td>${esc(s.customer||'Walk-in')}${s.phone?`<div style="font-size:11px;color:var(--ink-soft);">${esc(s.phone)}</div>`:''}</td>
+      <td style="font-size:12px;">${s.items.map(it=>esc(it.name)).join(', ')}</td><td class="num">${money(s.total)}</td><td class="num">${money(s.paid)}</td><td>${dueStatusPill(medSaleDue(s))}</td>
+      <td style="text-align:right;white-space:nowrap;"><button class="btn sm ghost" data-med="bill-print" data-id="${s.id}">Print</button>
+      <button class="btn sm ghost" data-med="bill-wa" data-id="${s.id}" style="color:#1da851;">WhatsApp</button>
+      ${medSaleDue(s)>0?` <button class="btn sm" data-med="bill-pay" data-id="${s.id}">Receive</button>`:''}
+      ${isAdmin()?` <button class="btn sm ghost" data-med="bill-edit" data-id="${s.id}">Edit</button> <button class="btn sm danger" data-med="bill-del" data-id="${s.id}">Delete</button>`:''}</td></tr>`).join('')}
+    </tbody></table></div>`}</div>`;
+}
+
+/* ---------- Expiry & alerts ---------- */
+let medExpFilter = '90';
+function medViewExpiry(){
+  const m = medEnsure(), mp = medSoldMap();
+  const rows = m.batches.map(b=>({b, st:medBatchStock(b,mp), d:medExpDays(b.exp), md:medById(b.medId)||{name:'?'}})).filter(x=>x.st>0);
+  const f = medExpFilter;
+  const shown = rows.filter(x=> f==='expired' ? x.d<0 : f==='all' ? true : (x.d>=0 && x.d<=Number(f))).sort((a,b)=> a.d-b.d);
+  const val = shown.reduce((a,x)=> a + x.st*(Number(x.b.rate)||0), 0);
+  const low = m.items.filter(x=>(Number(x.minStock)||0)>0 && medStockOf(x.id,mp).sellable <= Number(x.minStock));
+  return `<div class="pagehead"><div><h1>Expiry & Alerts</h1><div class="desc">Expired / near-expiry stock and low-stock medicines</div></div>
+    <div><button class="btn" data-med="csv-expiry">&#8681; Export CSV</button></div></div>
+  <div class="card"><div class="mtabs">${[['expired','Expired'],['30','≤ 30 days'],['60','≤ 60 days'],['90','≤ 90 days'],['180','≤ 180 days'],['all','All stock']].map(x=>`<button class="btn sm ${f===x[0]?'primary':''}" data-med="exp-filter" data-v="${x[0]}">${x[1]}</button>`).join('')}</div>
+    ${shown.length===0 ? emptyState('Nothing here','No batches match this filter.') : `
+    <div class="desc" style="margin-bottom:8px;">${shown.length} batches · cost value ${money(val)}</div>
+    <div style="max-height:62vh;overflow:auto;"><table><thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th class="num">Days left</th><th class="num">Stock</th><th class="num">Cost value</th><th>Status</th></tr></thead><tbody>
+    ${shown.map(x=>`<tr><td>${esc(x.md.name)}</td><td>${esc(x.b.batch)}</td><td>${medFmtExp(x.b.exp)}</td><td class="num">${x.d<0?'expired '+Math.abs(x.d)+'d ago':x.d}</td><td class="num">${medQtyStr(x.st,x.md)}</td><td class="num">${money(x.st*(Number(x.b.rate)||0))}</td><td>${medStatusPill(x.d,x.st)}</td></tr>`).join('')}
+    </tbody></table></div>`}</div>
+  <div class="card"><h2>Low stock (${low.length})</h2>${low.length===0 ? '<div class="desc">No medicine is below its minimum stock.</div>' : `
+    <table><thead><tr><th>Medicine</th><th class="num">Sellable stock</th><th class="num">Minimum</th></tr></thead><tbody>${low.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${medStockOf(x.id,mp).sellable}</td><td class="num">${x.minStock}</td></tr>`).join('')}</tbody></table>`}</div>`;
+}
+
+/* ---------- Reports & GST ---------- */
+let medRep = null;
+function medRepData(){
+  const m = medEnsure(); if(!medRep) medRep = { from: todayISO().slice(0,8)+'01', to: todayISO() };
+  const sales = m.sales.filter(s=> s.date>=medRep.from && s.date<=medRep.to);
+  const purs = m.purchases.filter(p=> p.date>=medRep.from && p.date<=medRep.to);
+  return { sales, purs };
+}
+function medViewReports(){
+  const { sales, purs } = medRepData();
+  let gross=0, disc=0, taxable=0, tax=0, total=0, cost=0; const byRate = {}, byMode = {}, byMed = {};
+  sales.forEach(s=>{
+    gross+=s.gross; disc+=s.discount; taxable+=s.taxable; tax+=s.tax; total+=s.total; byMode[s.mode] = (byMode[s.mode]||0)+s.total;
+    s.items.forEach(it=>{
+      const pq = (it.packQty!=null ? it.packQty : it.qty); cost += (Number(it.cost)||0)*pq;
+      const g = byRate[it.gst] = byRate[it.gst] || { taxable:0, tax:0 }; g.taxable += it.taxable; g.tax += it.tax;
+      const x = byMed[it.name] = byMed[it.name] || { qty:0, amt:0 }; x.qty += (it.packQty!=null ? it.packQty : it.qty); x.amt += it.amount;
+    });
+  });
+  const pTax = purs.reduce((a,p)=>a+p.gst,0), pTaxable = purs.reduce((a,p)=>a+p.taxable,0);
+  const top = Object.keys(byMed).map(k=>({n:k, ...byMed[k]})).sort((a,b)=>b.amt-a.amt).slice(0,10);
+  return `<div class="pagehead"><div><h1>Reports & GST</h1><div class="desc">Sales, profit estimate and GST summary for any date range</div></div>
+    <div><button class="btn" data-med="csv-sales">&#8681; Sales CSV</button></div></div>
+  <div class="card"><div class="grid cols-4"><div class="field"><label>From</label><input type="date" id="mr-from" data-mf="r-from" value="${medRep.from}"></div><div class="field"><label>To</label><input type="date" id="mr-to" data-mf="r-to" value="${medRep.to}"></div></div></div>
+  <div class="kpis">${medKpi('Bills', sales.length)}${medKpi('Net sales', money(total),'info')}${medKpi('Discount given', money(disc))}${medKpi('Taxable sales', money(taxable))}
+    ${medKpi('GST collected', money(tax))}${medKpi('Est. profit (ex-GST)', money(taxable-cost), taxable-cost>=0?'good':'bad')}${medKpi('Purchases', money(pTaxable+pTax))}${medKpi('Input GST (purchases)', money(pTax))}</div>
+  <div class="grid cols-2">
+    <div class="card"><h2>GST rate-wise (sales)</h2>${Object.keys(byRate).length===0?'<div class="desc">No sales in range.</div>':`<table><thead><tr><th>GST %</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Total GST</th></tr></thead><tbody>
+      ${Object.keys(byRate).sort((a,b)=>a-b).map(k=>`<tr><td>${k}%</td><td class="num">${money(byRate[k].taxable)}</td><td class="num">${money(byRate[k].tax/2)}</td><td class="num">${money(byRate[k].tax/2)}</td><td class="num">${money(byRate[k].tax)}</td></tr>`).join('')}
+      <tr><th>Total</th><th class="num">${money(taxable)}</th><th class="num">${money(tax/2)}</th><th class="num">${money(tax/2)}</th><th class="num">${money(tax)}</th></tr></tbody></table>`}</div>
+    <div class="card"><h2>Payment modes</h2>${Object.keys(byMode).length===0?'<div class="desc">No sales in range.</div>':`<table><tbody>${Object.keys(byMode).map(k=>`<tr><td>${esc(k)}</td><td class="num">${money(byMode[k])}</td></tr>`).join('')}</tbody></table>`}</div>
+  </div>
+  <div class="card"><h2>Top medicines</h2>${top.length===0?'<div class="desc">No sales in range.</div>':`<table><thead><tr><th>Medicine</th><th class="num">Packs sold</th><th class="num">Amount</th></tr></thead><tbody>${top.map(x=>`<tr><td>${esc(x.n)}</td><td class="num">${Math.round(x.qty*100)/100}</td><td class="num">${money(x.amt)}</td></tr>`).join('')}</tbody></table>`}</div>`;
+}
+
+/* ---------- Invoice (print) ---------- */
+function medInvoiceHtml(s, c){
+  const NC = 11, hasGst = !!(c.gst && c.gst.trim());
+  const itemRows = s.items.map((it,i)=>`<tr class="gi-item"><td class="center">${i+1}</td>
+    <td><strong>${esc(it.name)}</strong></td><td class="center">${esc(it.hsn||'')}</td><td class="center">${it.loose?('Loose '+esc(it.unitName||'')):esc(it.pack||'')}</td>
+    <td>${esc(it.batch)}${it.lot?`<div style="font-size:9px;color:#444;">Lot: ${esc(it.lot)}</div>`:''}</td><td class="center">${medFmtExp(it.exp)}</td>
+    <td class="num">${money(it.mrp)}</td><td class="center">${it.qty}${it.loose?' '+esc(it.unitName||''):''}</td><td class="center">${it.disc?it.disc+'%':'-'}</td><td class="center">${it.gst}%</td><td class="num">${money(it.amount)}</td></tr>`).join('');
+  const byRate = {};
+  s.items.forEach(it=>{ const g = byRate[it.gst] = byRate[it.gst] || { taxable:0, tax:0 }; g.taxable += it.taxable; g.tax += it.tax; });
+  const rates = Object.keys(byRate).sort((a,b)=>a-b);
+  const totalQty = s.items.reduce((a,it)=>a+(it.loose?0:it.qty),0), looseQty = s.items.reduce((a,it)=>a+(it.loose?it.qty:0),0);
+  const row = (label, val, bold)=> `<tr class="gi-tot"><td colspan="${NC-1}" style="text-align:right;${bold?'font-weight:700;':''}">${label}</td><td class="num" ${bold?'style="font-weight:700;"':''}>${val}</td></tr>`;
+  const cell = 'padding:4px 5px;';
+  return `
+  <div id="gst-invoice" style="font-size:11px;">
+    <div class="gi-title">${hasGst?'TAX INVOICE':'CASH / CREDIT MEMO'}</div>
+    <table class="gi-tbl"><tr>
+      <td style="width:56%;"><div style="display:flex;gap:12px;align-items:flex-start;">${c.logo?logoImgHtml(c):''}<div>
+        <div class="gi-shopname">${esc(c.name||'Pharmacy')}</div>
+        <div class="gi-shopmeta">${esc(c.address||'')}${c.address?'<br>':''}${c.phone?('Ph: '+esc(c.phone)+'<br>'):''}${c.gst?('GSTIN: '+esc(c.gst)+'<br>'):''}${c.dlNo?('<strong>D.L. No.: '+esc(c.dlNo)+'</strong><br>'):''}${c.stateName?('State: '+esc(c.stateName)+(c.stateCode?(', Code: '+esc(c.stateCode)):'')+'<br>'):''}${c.email?('E-Mail: '+esc(c.email)):''}</div></div></div></td>
+      <td><span class="gi-label">Invoice No.</span><br><span class="gi-strong">${esc(s.invoiceNo)}</span></td>
+      <td><span class="gi-label">Dated</span><br><span class="gi-strong">${fmtDate(s.date)}</span></td></tr>
+      <tr><td><span class="gi-label">Patient / Customer (Bill to)</span><br><span class="gi-strong">${esc(s.customer||'Walk-in Customer')}</span>${s.address?'<br>'+esc(s.address):''}${s.phone?'<br>Contact: '+esc(s.phone):''}</td>
+      <td colspan="2"><span class="gi-label">Doctor</span> <span class="gi-strong">${esc(s.doctor||'-')}</span><br><span class="gi-label">Payment mode</span> <span class="gi-strong">${esc(s.mode||'-')}</span></td></tr></table>
+    <table class="gi-tbl items-tbl">
+      <thead><tr><th style="width:4%;">Sl</th><th>Description of Medicine</th><th style="width:7%;">HSN</th><th style="width:8%;">Pack</th><th style="width:11%;">Batch</th><th style="width:7%;">Exp.</th><th style="width:9%;">MRP</th><th style="width:7%;">Qty</th><th style="width:6%;">Disc %</th><th style="width:6%;">GST</th><th style="width:11%;">Amount</th></tr></thead>
+      <tbody>${itemRows}
+        <tr><td colspan="${NC}" data-bl="itemsHeight" style="height:60px;border-left:1px solid #000;border-right:1px solid #000;">&nbsp;</td></tr>
+        ${row('Total MRP value', money(s.gross))}
+        ${s.discount>0?row('Less: Discount', '(-) '+money(s.discount)):''}
+        ${row('Taxable value', money(s.taxable))}
+        ${row('CGST', money(s.tax/2))}${row('SGST', money(s.tax/2))}
+        ${Math.abs(s.roundOff)>=0.005?row('Round off', (s.roundOff<0?'(-) ':'')+money(Math.abs(s.roundOff))):''}
+        <tr class="gi-tot gi-grand"><td style="border-top:1px solid #000;"></td><td style="border-top:1px solid #000;">Total</td><td colspan="5" style="border-top:1px solid #000;"></td><td class="center" style="border-top:1px solid #000;">${totalQty?totalQty+' pk':''}${totalQty&&looseQty?' + ':''}${looseQty?looseQty+' lse':''}</td><td colspan="2" style="border-top:1px solid #000;"></td><td class="num" style="border-top:1px solid #000;">Rs ${money(s.total)}</td></tr>
+      </tbody></table>
+    <div class="gi-words"><div class="lbl">Amount Chargeable (in words)</div><div class="gi-strong">${amountInWords(s.total)}</div></div>
+    <table class="gi-tbl" style="margin-top:-1px;"><thead><tr><th>GST %</th><th>Taxable Value</th><th>CGST Rate</th><th>CGST Amt</th><th>SGST Rate</th><th>SGST Amt</th><th>Total Tax</th></tr></thead><tbody>
+      ${rates.map(k=>`<tr><td>${k}%</td><td class="num">${money(byRate[k].taxable)}</td><td class="center">${k/2}%</td><td class="num">${money(byRate[k].tax/2)}</td><td class="center">${k/2}%</td><td class="num">${money(byRate[k].tax/2)}</td><td class="num">${money(byRate[k].tax)}</td></tr>`).join('')}</tbody></table>
+    <div class="gi-bottom">
+      <div class="qr-col">${c.pan?`<div class="gi-label">Company's PAN</div><div class="gi-strong">${esc(c.pan)}</div>`:''}
+        <div class="gi-label" style="margin-top:8px;">Terms &amp; Declaration</div>
+        <div style="font-size:9.5px;line-height:1.4;">MRP is inclusive of all taxes. Please check batch &amp; expiry before leaving the counter. Medicines once sold will not be taken back or exchanged. Schedule H/H1 drugs are sold against a valid prescription only.</div></div>
+      <div class="bank-col"><div class="bank-details">${(c.bankName||c.bankAccNo)?`<strong>Company's Bank Details</strong><br>${c.bankAccName?'A/c Holder: '+esc(c.bankAccName)+'<br>':''}${c.bankName?'Bank: '+esc(c.bankName)+'<br>':''}${c.bankAccNo?'A/c No.: '+esc(c.bankAccNo)+'<br>':''}${c.bankIFSC?'Branch &amp; IFSC: '+esc(c.bankIFSC):''}`:''}</div>
+        <div class="gi-sign">for ${esc(c.name||'')}${sigBlockHtml(s)||'<br><br><br>'}Authorised Signatory</div></div></div>
+    <div class="gi-footer">${c.jurisdiction?esc(c.jurisdiction)+' · ':''}This is a Computer Generated Invoice</div>
+  </div>`;
+}
+function medPrintBill(id){
+  const s = medEnsure().sales.find(x=>x.id===id); if(!s) return;
+  const FW = 820, modal = document.getElementById('modal-root');
+  modal.innerHTML = `<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:${FW}px;">
+    <div class="modal-head no-print"><h2>Bill Preview — ${esc(s.invoiceNo)}</h2><div><button class="btn sm" data-med="bill-wa" data-id="${s.id}" style="background:#25D366;border-color:#1da851;color:#fff;">WhatsApp</button> <button class="btn sm primary" data-action="do-print">Print</button><button class="modal-close" data-close="modal" style="margin-left:8px;">&times;</button></div></div>
+    <div id="bill-fit-wrap" style="overflow:hidden;position:relative;"><div id="bill-fit-sheet" style="width:${FW}px;">${medInvoiceHtml(s, state.company)}</div></div></div></div>`;
+  attachModalHandlers();
+  const fw = modal.querySelector('#bill-fit-wrap'), fs = modal.querySelector('#bill-fit-sheet');
+  const fit = ()=>{ if(!fw.isConnected) return; fs.style.setProperty('--bs',1); const sc = Math.min(1, fw.clientWidth / FW); fs.style.setProperty('--bs', sc); fw.style.height = Math.ceil(fs.offsetHeight*sc)+'px'; };
+  fit(); setTimeout(fit,250); window.addEventListener('resize', fit);
+}
+
+/* ---------- Router + events ---------- */
+function medView(){
+  switch(activeTab){
+    case 'meddash': return medViewDash();
+    case 'medbill': return medViewBill();
+    case 'medbills': return medViewBills();
+    case 'medpurchase': return medViewPurchase();
+    case 'medstock': return medViewStock();
+    case 'medexpiry': return medViewExpiry();
+    case 'medreports': return medViewReports();
+  }
+  return medViewDash();
+}
+function medGwItems(){
+  const it = [
+    {sec:'Masters'}, {l:'Medicines & Stock', t:'medstock', h:'M'},
+    {sec:'Transactions'}, {l:'Medicine Billing', t:'medbill', h:'B'}, {l:'Purchase / Batch Entry', t:'medpurchase', h:'U'}, {l:'Saved Bills', t:'medbills', h:'V'},
+    {sec:'Utilities'}, {l:'Expiry & Alerts', t:'medexpiry', h:'E'}
+  ];
+  if(isAdmin()) it.splice(2, 0, {l:'Company Setup', t:'company', h:'O'});
+  if(isAdmin()) it.push({l:'Users', t:'users', h:'S'});
+  if(isAdmin()) it.push({l:'Backup & Restore', t:'backup', h:'K'});
+  it.push({sec:'Reports'}, {l:'Reports & GST', t:'medreports', h:'R'}, {l:'Overview', t:'meddash', h:'D'}, {pad:1}, {l:'Quit', t:'quit', h:'Q'});
+  return it;
+}
+function medStartEdit(id){
+  if(!isAdmin()){ alert('Only the company admin can edit a saved bill.'); return; }
+  const s = medEnsure().sales.find(x=>x.id===id); if(!s) return;
+  medEditId = id;
+  medDraft = { editId:id, invoiceNo:s.invoiceNo, date:s.date, customer:s.customer||'', phone:s.phone||'', address:s.address||'', doctor:s.doctor||'', mode:s.mode||'Cash', paid:String(s.paid), billDisc:'',
+    items: s.items.map(it=>({ medId:it.medId, query:it.name, batchId:it.batchId, qty:it.qty, mrp:it.mrp, disc:it.disc, gst:it.gst, loose:!!it.loose })) };
+  activeTab = 'medbill'; render();
+}
+function medAct(a, el){
+  const m = medEnsure(), i = Number(el.dataset.i), id = el.dataset.id;
+  switch(a){
+    case 'goto': activeTab = el.dataset.tab; render(); break;
+    case 'stock-tab': medStockTab = el.dataset.v; render(); break;
+    case 'exp-filter': medExpFilter = el.dataset.v; render(); break;
+    case 'med-new': medFormModal(); break;
+    case 'med-edit': medFormModal(medById(id)); break;
+    case 'med-del': {
+      if(!isAdmin()) return; const md = medById(id); if(!md) return;
+      if(m.batches.some(b=>b.medId===id)){ alert('This medicine has batches/stock history. Delete its batches first (only unsold batches can be deleted).'); return; }
+      if(confirm('Delete '+md.name+'?')){ m.items = m.items.filter(x=>x.id!==id); saveState(); render(); } break; }
+    case 'med-save': {
+      const name = document.getElementById('mm-name').value.trim(); if(!name){ alert('Medicine name is required.'); return; }
+      if(m.items.some(x=> x.id!==id && x.name.trim().toLowerCase()===name.toLowerCase())){ alert('A medicine with this name already exists.'); return; }
+      const v = k=> document.getElementById(k).value;
+      const data = { name, generic:v('mm-generic').trim(), mfr:v('mm-mfr').trim(), hsn:v('mm-hsn').trim(), pack:v('mm-pack').trim(), unit:v('mm-unit'), schedule:v('mm-sched'), gst:Number(v('mm-gst'))||0, mrp:Number(v('mm-mrp'))||0, defDisc:Number(v('mm-disc'))||0, minStock:Number(v('mm-min'))||0, rack:v('mm-rack').trim(), perPack:Number(v('mm-perpack'))||0, looseUnit:v('mm-lunit').trim()||'Tab', allowLoose:v('mm-loose')==='Yes' };
+      if(data.allowLoose && !(data.perPack>1)){ alert('For loose sale, enter how many units are in one pack (2 or more).'); return; }
+      if(id){ Object.assign(medById(id), data); } else { m.items.push(Object.assign({ id:uid('med') }, data)); }
+      saveState(); closeModal(); render(); break; }
+    case 'batches': medBatchesModal(id); break;
+    case 'batch-add': {
+      const v = k=> document.getElementById(k).value.trim();
+      const exp = medParseExp(v('ba-exp')), mfg = v('ba-mfg') ? medParseExp(v('ba-mfg')) : '';
+      if(!v('ba-batch')){ alert('Enter the batch number.'); return; }
+      if(!exp){ alert('Enter expiry as MM/YYYY.'); return; }
+      if(v('ba-mfg') && !mfg){ alert('Mfg must be MM/YYYY.'); return; }
+      if(!(Number(v('ba-qty'))>0)){ alert('Enter the quantity.'); return; }
+      if(!(Number(v('ba-mrp'))>0)){ alert('Enter the MRP.'); return; }
+      m.batches.push({ id:uid('mb'), medId:id, batch:v('ba-batch'), lot:v('ba-lot'), mfg, exp, qty:Number(v('ba-qty')), free:Number(v('ba-free'))||0, rate:Number(v('ba-rate'))||0, mrp:Number(v('ba-mrp')), purchaseId:'', date:todayISO(), supplier:'Opening stock' });
+      saveState(); medBatchesModal(id); render(); break; }
+    case 'batch-del': {
+      const b = medBatchById(id); if(!b) return;
+      if((medSoldMap()[id]||0)>0){ alert('Cannot delete: this batch has sales.'); return; }
+      if(confirm('Delete batch '+b.batch+' and its stock?')){ m.batches = m.batches.filter(x=>x.id!==id); saveState(); medBatchesModal(el.dataset.medId); render(); } break; }
+    case 'batch-mrp': {
+      const b = medBatchById(id); if(!b) return; const n = prompt('New MRP for batch '+b.batch+' (₹):', b.mrp);
+      if(n!==null && Number(n)>0){ b.mrp = Number(n); saveState(); medBatchesModal(el.dataset.medId); render(); } break; }
+    case 'csv-stock': {
+      const mp = medSoldMap();
+      medCsv('medicine-stock-'+todayISO()+'.csv', [['Medicine','Batch','Lot','Mfg','Expiry','Stock','Purchase rate','MRP','GST %']].concat(m.batches.map(b=>{ const md = medById(b.medId)||{}; return [md.name,b.batch,b.lot,medFmtExp(b.mfg),medFmtExp(b.exp),medBatchStock(b,mp),b.rate,b.mrp,md.gst]; })));
+      break; }
+    case 'csv-expiry': {
+      const mp = medSoldMap();
+      medCsv('expiry-report-'+todayISO()+'.csv', [['Medicine','Batch','Expiry','Days left','Stock','Cost value']].concat(m.batches.filter(b=>medBatchStock(b,mp)>0).sort((x,y)=>(x.exp||'').localeCompare(y.exp||'')).map(b=>[(medById(b.medId)||{}).name,b.batch,medFmtExp(b.exp),medExpDays(b.exp),medBatchStock(b,mp),r2(medBatchStock(b,mp)*b.rate)])));
+      break; }
+    case 'csv-sales': {
+      const { sales } = medRepData(), rows = [['Date','Invoice','Customer','Medicine','Batch','Expiry','Rate','Qty','Unit','Disc %','GST %','Taxable','GST','Amount']];
+      sales.forEach(s=> s.items.forEach(it=> rows.push([s.date,s.invoiceNo,s.customer||'Walk-in',it.name,it.batch,medFmtExp(it.exp),it.mrp,it.qty,(it.loose?(it.unitName||'loose'):'pack'),it.disc,it.gst,it.taxable,it.tax,it.amount])));
+      medCsv('medicine-sales-'+medRep.from+'_to_'+medRep.to+'.csv', rows); break; }
+    // billing
+    case 'b-add-row': medDraft.items.push(medNewRow()); render(); break;
+    case 'b-rm-row': medDraft.items.splice(i,1); if(!medDraft.items.length) medDraft.items.push(medNewRow()); render(); break;
+    case 'b-apply-disc': { const bd = Number(medDraft.billDisc)||0; medDraft.items.forEach(r=>{ r.disc = bd; }); render(); break; }
+    case 'b-clear': if(confirm('Clear this bill?')){ medDraft = null; render(); } break;
+    case 'b-save': medSaveBill(); break;
+    // purchase
+    case 'p-add-row': medPur.items.push(medNewPurRow()); render(); break;
+    case 'p-rm-row': medPur.items.splice(i,1); if(!medPur.items.length) medPur.items.push(medNewPurRow()); render(); break;
+    case 'p-save': medSavePurchase(); break;
+    case 'p-del': {
+      if(!isAdmin()) return; const p = m.purchases.find(x=>x.id===id); if(!p) return; const mp = medSoldMap();
+      if(m.batches.some(b=>b.purchaseId===id && (mp[b.id]||0)>0)){ alert('Cannot delete: some batches of this purchase are already sold.'); return; }
+      if(confirm('Delete purchase '+p.no+'? Its batches will be removed from stock.')){ m.batches = m.batches.filter(b=>b.purchaseId!==id); m.purchases = m.purchases.filter(x=>x.id!==id); saveState(); render(); } break; }
+    // saved bills
+    case 'bill-print': medPrintBill(id); break;
+    case 'bill-wa': closeModal(); sendBillWhatsApp(id); break;
+    case 'bill-edit': medStartEdit(id); break;
+    case 'b-cancel-edit': medEditId = null; medDraft = null; activeTab = 'medbills'; render(); break;
+    case 'bill-pay': {
+      const s = m.sales.find(x=>x.id===id); if(!s) return; const due = medSaleDue(s);
+      const n = prompt('Receive payment for '+s.invoiceNo+'\nPending: '+money(due)+'\nAmount (₹):', due);
+      if(n===null) return; const amt = Number(n);
+      if(!(amt>0) || amt>due+0.005){ alert('Enter an amount between 0 and '+due); return; }
+      s.paid = r2(s.paid + amt); saveState(); render(); break; }
+    case 'bill-del': {
+      if(!isAdmin()) return; const s = m.sales.find(x=>x.id===id); if(!s) return;
+      if(confirm('Delete bill '+s.invoiceNo+'? Stock of its batches will be restored.')){ m.sales = m.sales.filter(x=>x.id!==id); saveState(); render(); } break; }
+  }
+}
+function medField(f, el, type){
+  const d = medDraft, v = el.value, i = Number(el.dataset.i);
+  switch(f){
+    case 'b-cust': d.customer = v; break;
+    case 'b-phone': d.phone = v; break;
+    case 'b-addr': d.address = v; break;
+    case 'b-doc': d.doctor = v; break;
+    case 'b-date': d.date = v; break;
+    case 'b-billdisc': d.billDisc = v; break;
+    case 'b-mode': d.mode = v; medRefreshBill(); break;
+    case 'b-paid': d.paid = v; medRefreshBill(); break;
+    case 'b-q': {
+      if(type!=='change') { d.items[i].query = v; return; }
+      const r = d.items[i], q = v.trim().toLowerCase(), items = medEnsure().items;
+      let md = items.find(x=>x.name.toLowerCase()===q);
+      if(!md && q){ const c = items.filter(x=>x.name.toLowerCase().includes(q)); if(c.length===1) md = c[0]; }
+      if(md) medApplyMed(r, md); else { r.medId=''; r.batchId=''; r.query = v; }
+      render(); break; }
+    case 'b-batch': { if(type!=='change') return; const r = d.items[i], b = medBatchById(v), md = medById(r.medId); r.batchId = v; if(b){ r.mrp = (r.loose && md && md.perPack>1) ? r2(b.mrp/md.perPack) : b.mrp; } render(); break; }
+    case 'b-unit': { if(type!=='change') return; const r = d.items[i], b = medBatchById(r.batchId), md = medById(r.medId); r.loose = (v==='loose'); const base = b ? b.mrp : (md?md.mrp:0); r.mrp = (r.loose && md && md.perPack>1) ? r2(base/md.perPack) : base; render(); break; }
+    case 'b-num': { const r = d.items[i]; r[el.dataset.k] = v; medRefreshBill(); break; }
+    // purchase
+    case 'p-sup': medPur.supplier = v; break;
+    case 'p-inv': medPur.invNo = v; break;
+    case 'p-date': medPur.date = v; break;
+    case 'p-paid': medPur.paid = v; { const s = document.getElementById('mp-sum'); if(s) s.innerHTML = medPurSumHtml(medPur); } break;
+    case 'p-name': {
+      const r = medPur.items[i]; r.name = v; if(type!=='change') return;
+      const md = medEnsure().items.find(x=>x.name.toLowerCase()===v.trim().toLowerCase());
+      if(md){ r.gst = md.gst; r.hsn = md.hsn||'3004'; r.pack = md.pack||''; if(!r.mrp) r.mrp = md.mrp||''; render(); } break; }
+    case 'p-row': { medPur.items[i][el.dataset.k] = v; const s = document.getElementById('mp-sum'); if(s) s.innerHTML = medPurSumHtml(medPur); break; }
+    // reports
+    case 'r-from': if(type==='change'){ medRep.from = v; render(); } break;
+    case 'r-to': if(type==='change'){ medRep.to = v; render(); } break;
+  }
+}
+(function medInit(){
+  const click = e=>{ const el = e.target.closest('[data-med]'); if(!el || !isMedCo()) return; medAct(el.dataset.med, el); };
+  const field = e=>{ const el = e.target.closest('[data-mf]'); if(!el || !isMedCo()) return; if(!medDraft && el.dataset.mf.charAt(0)==='b') medDraft = medNewDraft(); if(!medPur && el.dataset.mf.charAt(0)==='p') return; medField(el.dataset.mf, el, e.type); };
+  ['main','modal-root'].forEach(id=>{ const n = document.getElementById(id); if(!n) return; n.addEventListener('click', click); n.addEventListener('input', field); n.addEventListener('change', field); });
+})();
+
 </script>
 </body>
 </html>
