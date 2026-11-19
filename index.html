@@ -1247,7 +1247,11 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
 /* bill layout settings */
 #gst-invoice .gi-title.sized{ display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
 #gst-invoice [data-bl]{ box-sizing:border-box; }
+#gst-invoice .gi-land-l > .gi-words{ flex:1; }
 #gst-invoice tr[style*="height:"] > td, #gst-invoice tr[style*="height:"] > th, #gst-invoice td[style*="height:"]{ padding-top:1px !important; padding-bottom:1px !important; line-height:1.15; }
+#gst-invoice .gi-cmp table{ width:100%; border-collapse:collapse; margin:0; table-layout:auto; }
+#gst-invoice .gi-cmp th, #gst-invoice .gi-cmp td{ padding:1px 3px !important; border:none !important; background:none !important; font-size:inherit !important; font-weight:400; line-height:1.25 !important; height:auto !important; text-transform:none !important; letter-spacing:0 !important; }
+#gst-invoice .gi-cmp th{ font-weight:700 !important; border-bottom:1px solid #000 !important; }
 #gst-invoice .gi-words[style*="height:"]{ padding-top:2px; padding-bottom:2px; line-height:1.15; }
 #gst-invoice .gi-bottom[style*="height:"] .qr-col, #gst-invoice .gi-bottom[style*="height:"] .bank-col{ padding-top:3px; padding-bottom:3px; }
 #gst-invoice .gi-bottom[style*="height:"] .gi-sign{ margin-top:2px; }
@@ -1306,7 +1310,7 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
   #modal-root #gst-invoice{ width:var(--pw,100%) !important; max-width:none !important; margin:0 !important; zoom:var(--pz,1); }
   @page{ size:A4; margin:10mm; }
 }
-#bill-fit-sheet #gst-invoice, #bv-sheet #gst-invoice{ max-width:none !important; }
+#bill-fit-sheet #gst-invoice, #bv-sheet #gst-invoice, #bd-sheet #gst-invoice{ max-width:none !important; }
 @media screen{ #bill-fit-sheet{ transform-origin:0 0; transform:scale(var(--bs,1)); } }
 @media print{ #bill-fit-wrap{ height:auto !important; overflow:visible !important; } #bill-fit-sheet{ width:100% !important; transform:none !important; } }
 </style>
@@ -2462,8 +2466,9 @@ function readLogoFile(file){
 function printWithA4Fit(){
   const el = document.getElementById('gst-invoice');
   if(el){
-    const PW = 716, PH = 1030;                           // ~190mm x 277mm in CSS px, with a small safety margin
-    const filler = el.querySelector('td[data-bl="itemsHeight"]');
+    const pst = document.getElementById('med-page-style'), land = !!(pst && pst.dataset.orient==='landscape');
+    const PW = land ? 1055 : 716, PH = land ? 725 : 1030;                           // ~190mm x 277mm in CSS px, with a small safety margin
+    const filler = el.querySelector('td[data-bl^="itemsHeight"]');
     const origH = filler ? filler.style.height : '';
     const w = el.offsetWidth || 820;
     // 1) collapse the blank "item area" so we know the real content height
@@ -2500,22 +2505,39 @@ function readBillCfgForm(){
   return out;
 }
 /* Visual bill designer: live preview with drag bars to resize the boxes, then Save. */
-function openBillDesigner(){
+function openBillDesigner(opts){
   if(!isAdmin()) return;
-  const draft = readBillCfgForm();
+  const keep = (opts && opts.__bd) ? opts : null;
+  const draft = keep ? keep.draft : readBillCfgForm();
   const cc = Object.assign({}, state.company, { bill: draft });
+  { const _o = document.getElementById('c-orient'); if(_o) cc.medOrient = _o.value; }
   if(companyLogoDraft !== null) cc.logo = companyLogoDraft;
-  if(!(cc.gst && cc.gst.trim())){ alert('Enter the GSTIN first - box sizes apply to the GST Tax Invoice layout.'); return; }
-  const real = (state.sales||[]).length ? state.sales[state.sales.length-1] : null;
-  const sale = (real && real.items) ? real : { id:'sample', invoiceNo:'SAMPLE-001', date:todayISO(), customer:'Sample Customer', customerPhone:'9999999999', customerAddress:'Sample address',
+  if(!isMedCo() && !(cc.gst && cc.gst.trim())){ alert('Enter the GSTIN first - box sizes apply to the GST Tax Invoice layout.'); return; }
+  const med = isMedCo(), ms = med ? medEnsure().sales : [];
+  let real = med ? (ms.length ? ms[ms.length-1] : null) : ((state.sales||[]).length ? state.sales[state.sales.length-1] : null);
+  const hasSaved = !!real; if(keep && keep.sample) real = null;
+  const sale = (med && !real) ? { id:'sample', invoiceNo:'MB-SAMPLE', isMed:true, date:todayISO(), customer:'Sample Customer', phone:'9999999999', address:'Sample address', doctor:'Dr. Sample', mode:'Cash',
+    items:[{ name:'Sample Tablet 10s', mfr:'Sample Pharma', hsn:'3004', pack:'10 TAB', batch:'B123', lot:'L45', mfg:'2026-01', exp:'2028-01', mrp:112, qty:1, disc:10, gst:12, taxable:90.0, tax:10.8, amount:100.8 }],
+    gross:112, discount:11.2, taxable:90, tax:10.8, roundOff:0.2, total:101 } : (real && real.items) ? real : { id:'sample', invoiceNo:'SAMPLE-001', date:todayISO(), customer:'Sample Customer', customerPhone:'9999999999', customerAddress:'Sample address',
     items:[{ productId:'', name:'Sample Item', qty:1, price:11800 }], subtotal:11800, discount:0, total:11800, paid:11800, paymentMode:'UPI' };
-  const LABELS = { titleHeight:'Title', headerHeight:'Seller / invoice row', buyerHeight:'Buyer box', tableHeadHeight:'Column headings', itemRowHeight:'Item row', itemsHeight:'Item area',
+  const LABELS = { titleHeight:'Title', headerHeight:'Seller / invoice row', buyerHeight:'Buyer box', tableHeadHeight:'Column headings', itemRowHeight:'Item row', itemsHeight:'Item area', itemsHeightL:'Item area (landscape)',
     subtotalHeight:'Taxable total row', cgstHeight:'CGST row', sgstHeight:'SGST row', discountHeight:'Discount row', roundHeight:'Round-off row', totalHeight:'Total row',
     wordsHeight:'Amount in words', hsnHeadHeight:'Tax table heading', hsnRowHeight:'Tax table row', taxWordsHeight:'Tax in words', bottomHeight:'Bottom box', jurisHeight:'Jurisdiction line', footerHeight:'Footer line' };
-  const FW = 820;
-  document.getElementById('modal-root').innerHTML = `<div class="modal-bg"><div class="modal wide" style="max-width:880px;">
+  const oSel = document.getElementById('c-orient');
+  const orient = (keep && keep.orient) || (oSel ? oSel.value : state.company.medOrient) || 'portrait';
+  const land = orient === 'landscape'; cc.medOrient = orient;
+  const FW = land ? 1100 : 820, A4R = land ? (725/1055) : (1030/716);
+  document.getElementById('modal-root').innerHTML = `<div class="modal-bg"><div class="modal wide" style="max-width:${FW+60}px;">
     <div class="modal-head"><h2>Adjust bill layout</h2><button class="modal-close" id="bd-x" type="button">&times;</button></div>
-    <div class="desc" style="margin-bottom:4px;">Drag a blue bar up/down to resize a line, or the green &#10021; handle on a paragraph to move it. The red dashed line is the end of an A4 page. Then press <b>Save layout</b>.${real?'':' (Sample bill shown)'}</div>
+    <div class="desc" style="margin-bottom:4px;">Drag a blue bar up/down to resize a line, or the green &#10021; handle on a paragraph to move it. The red dashed line is the end of an A4 ${land?'landscape ':''}page. Then press <b>Save layout</b>.${real?'':' (Sample bill shown)'}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"><strong style="font-size:13px;">Paper:</strong>
+      <button class="btn sm ${land?'':'primary'}" type="button" id="bd-or-p">Portrait A4</button>
+      <button class="btn sm ${land?'primary':''}" type="button" id="bd-or-l">Landscape A4</button>
+      ${(!med && land)?'<span style="font-size:12px;color:#b45309;">Note: this company uses the standard GST bill, which has one layout (widened for landscape). The wide Lot/Mfg/Exp layout is for Medicine-type companies.</span>':''}</div>
+    ${med?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"><strong style="font-size:13px;">Preview with:</strong>
+      <button class="btn sm ${real?'':'primary'}" type="button" id="bd-pv-sample">Sample bill</button>
+      <button class="btn sm ${real?'primary':''}" type="button" id="bd-pv-saved" ${hasSaved?'':'disabled title="No saved bill yet"'}>Last saved bill${hasSaved?' ('+esc(ms[ms.length-1].invoiceNo)+')':''}</button>
+      <span style="font-size:12px;color:var(--ink-soft);">Drag the <b style="color:#2457d6;">blue vertical bars</b> left/right to change column widths.</span></div>`:''}
     <div id="bd-a4" style="font-size:13px;font-weight:600;margin-bottom:8px;"></div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#f1f5f9;border-radius:8px;">
       <strong style="font-size:13px;">Item rows text:</strong>
@@ -2533,7 +2555,7 @@ function openBillDesigner(){
       <button class="btn sm" type="button" id="bd-t-plus">A+</button>
       <label class="bl-chk" style="margin:0 0 0 6px;"><input type="checkbox" id="bd-t-bold" ${draft.totalBold?'checked':''}> Total row bold</label>
     </div>
-    <div id="bd-wrap" style="overflow:hidden;position:relative;background:#fff;"><div id="bd-sheet" style="width:${FW}px;position:relative;transform-origin:0 0;">${gstInvoiceHtml(sale, cc)}</div></div>
+    <div id="bd-wrap" style="overflow:hidden;position:relative;background:#fff;"><div id="bd-sheet" style="width:${FW}px;position:relative;transform-origin:0 0;">${(med?medInvoiceHtml(sale, cc):gstInvoiceHtml(sale, cc))}</div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px;">
       <button class="btn ghost" type="button" id="bd-reset">Reset sizes &amp; positions</button>
       <button class="btn" type="button" id="bd-cancel">Cancel</button>
@@ -2547,12 +2569,18 @@ function openBillDesigner(){
   a4line.innerHTML = '<span style="position:absolute;left:4px;top:2px;background:#d92d20;color:#fff;font:600 10px sans-serif;padding:1px 6px;border-radius:8px;">A4 page end</span>';
   sheet.appendChild(a4line);
   const inv = sheet.querySelector('#gst-invoice');
+  { const sw = (o)=>{ close0(); openBillDesigner(Object.assign({ __bd:true, draft:draft, sample:!real, orient:orient }, o)); };
+    const b1 = root.querySelector('#bd-pv-sample'), b2 = root.querySelector('#bd-pv-saved');
+    if(b1) b1.addEventListener('click', ()=>sw({sample:true})); if(b2) b2.addEventListener('click', ()=>sw({sample:false}));
+    root.querySelector('#bd-or-p').addEventListener('click', ()=>sw({orient:'portrait'}));
+    root.querySelector('#bd-or-l').addEventListener('click', ()=>sw({orient:'landscape'})); }
   if(!draft.moves || typeof draft.moves !== 'object') draft.moves = {};
   const MLABELS = { sellerBlock:'Company name & address', buyerBlock:'Buyer details', amtWordsBlock:'Amount in words', taxWordsBlock:'Tax in words',
     panBlock:'PAN', declBlock:'Declaration', termsBlock:'Terms & conditions', bankBlock:'Bank details', signBlock:'Signature / seal' };
   const mels = {}; sheet.querySelectorAll('[data-mv]').forEach(el=>{ mels[el.dataset.mv] = el; });
   const mhandles = {};
   let sc = 1;
+  const close0 = ()=>window.removeEventListener('resize', place);
   const apply = (key, v)=>{
     const el = els[key]; if(!el) return;
     sheet.querySelectorAll('[data-bl="'+key+'"]').forEach(t=>{
@@ -2578,8 +2606,12 @@ function openBillDesigner(){
       h.style.left = ((r.left - sr.left) / sc - 4) + 'px';
       h.style.top = ((r.top - sr.top) / sc - 4) + 'px';
     });
+    if(cbars.length){
+      const top = (cth[0].getBoundingClientRect().top - sr.top) / sc, ie = els.itemsHeight || els.itemsHeightL, bot = ie ? (ie.getBoundingClientRect().bottom - sr.top) / sc : top + 60;
+      cbars.forEach((b,i)=>{ const r = cth[i].getBoundingClientRect(); b.style.left = ((r.right - sr.left) / sc) + 'px'; b.style.top = top + 'px'; b.style.height = Math.max(20, bot - top) + 'px'; b.lastChild.textContent = cth[i].textContent + ' ' + (parseFloat(cth[i].style.width)||0).toFixed(1) + '%  ↔'; });
+    }
     wrap.style.height = Math.ceil(sheet.offsetHeight * sc) + 'px';
-    const lim = inv.offsetWidth * (1030 / 716), H = inv.offsetHeight;
+    const lim = inv.offsetWidth * A4R, H = inv.offsetHeight;
     a4line.style.top = lim + 'px';
     const st = root.querySelector('#bd-a4');
     if(H <= lim){ st.style.color = '#166534'; st.textContent = '\u2713 Fits on one A4 page (' + Math.round(H/lim*100) + '% of the page height)'; }
@@ -2622,6 +2654,35 @@ function openBillDesigner(){
       h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
     });
   });
+  /* ---- vertical column bars (medical bill): drag to resize a column; the next column absorbs the change ---- */
+  const cth = [...sheet.querySelectorAll('.items-tbl thead th[data-ci]')], ckey = land ? 'l' : 'p';
+  const cbars = [];
+  if(med && cth.length > 1){
+    const cur = ()=> cth.map(t=>parseFloat(t.style.width)||0);
+    const setW = a=>{ a.forEach((v,i)=>{ cth[i].style.width = v.toFixed(2)+'%'; }); };
+    cth.slice(0,-1).forEach((th,i)=>{
+      const h = document.createElement('div');
+      h.title = 'Drag to resize column: ' + th.textContent;
+      h.style.cssText = 'position:absolute;width:16px;margin-left:-8px;cursor:ew-resize;touch-action:none;z-index:6;background:linear-gradient(90deg,transparent 6px,#2457d6 6px,#2457d6 9px,transparent 9px);';
+      h.innerHTML = '<span style="position:absolute;left:18px;top:-2px;background:#2457d6;color:#fff;font:600 11px sans-serif;padding:2px 7px;border-radius:10px;white-space:nowrap;opacity:0;pointer-events:none;"></span>';
+      h.addEventListener('pointerenter', ()=>{ h.lastChild.style.opacity = 1; });
+      h.addEventListener('pointerleave', ()=>{ if(!h._drag) h.lastChild.style.opacity = 0; });
+      sheet.appendChild(h); cbars.push(h);
+      h.addEventListener('pointerdown', e=>{
+        e.preventDefault(); h.setPointerCapture(e.pointerId); h._drag = true;
+        const x0 = e.clientX, w0 = cur(), tw = cth[0].closest('table').getBoundingClientRect().width / sc;
+        const mv = ev=>{
+          let d = (ev.clientX - x0) / sc / tw * 100;
+          d = Math.max(2 - w0[i], Math.min(w0[i+1] - 2, d));
+          const w = w0.slice(); w[i] += d; w[i+1] -= d;
+          setW(w); draft.colW = Object.assign({}, draft.colW); draft.colW[ckey] = w.map(v=>Math.round(v*100)/100); place();
+        };
+        const up = ()=>{ h._drag = false; h.lastChild.style.opacity = 0; h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); };
+        h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+      });
+    });
+    const sv = draft.colW && draft.colW[ckey]; if(sv && sv.length === cth.length) cth.forEach((t,i)=>{ t.style.width = sv[i] + '%'; });
+  }
   const applyItemFont = ()=>{
     let f = Number(draft.itemFontSize); if(!isFinite(f)) f = 11; f = Math.max(6, Math.min(24, f)); draft.itemFontSize = f;
     sheet.querySelectorAll('tr.gi-item').forEach(r=>{ r.style.setProperty('--ifs', f + 'px'); r.style.setProperty('--ifw', draft.itemBold ? 700 : 400); });
@@ -2650,6 +2711,7 @@ function openBillDesigner(){
   root.querySelector('#bd-cancel').addEventListener('click', close);
   root.querySelector('#bd-reset').addEventListener('click', ()=>{
     Object.keys(LABELS).forEach(k=>{ draft[k] = BILL_DEFAULTS[k]; apply(k, BILL_DEFAULTS[k]); });
+    draft.colW = {}; if(med){ const dflt = ({ l:[3,16,7,5,5,7,5,5,5,6,5,4,5,6,4,5,7], p:[4,24,7,8,11,7,9,7,6,6,11] })[ckey]; cth.forEach((t,i)=>{ t.style.width = dflt[i] + '%'; }); }
     draft.moves = {}; Object.keys(mels).forEach(k=>{ mels[k].style.transform = ''; });
     draft.itemFontSize = BILL_DEFAULTS.itemFontSize; draft.itemBold = BILL_DEFAULTS.itemBold;
     root.querySelector('#bd-f-size').value = draft.itemFontSize; root.querySelector('#bd-f-bold').checked = draft.itemBold; applyItemFont();
@@ -2658,7 +2720,7 @@ function openBillDesigner(){
   });
   root.querySelector('#bd-save').addEventListener('click', ()=>{
     if(!isAdmin()) return;
-    state.company = Object.assign({}, state.company, { bill: Object.assign({}, draft) });
+    state.company = Object.assign({}, state.company, { bill: Object.assign({}, draft), medOrient: orient });
     saveState(); close(); render();
   });
 }
@@ -2676,6 +2738,14 @@ function viewCompany(){
           <button class="btn sm danger" type="button" id="c-logo-remove">Remove</button>
         </div>
         <div class="desc" style="margin-top:4px;">PNG or JPG. Click “Save Company Details” after choosing.</div>
+      </div>
+      <div class="field" style="background:#eef6ff;border:1px solid #b9d6f2;border-radius:8px;padding:10px 12px;">
+        <label style="font-weight:700;">Bill paper layout (print / PDF / WhatsApp)</label>
+        <select id="c-orient" style="max-width:420px;">
+          <option value="portrait" ${c.medOrient!=='landscape'?'selected':''}>Portrait A4 (standard)</option>
+          <option value="landscape" ${c.medOrient==='landscape'?'selected':''}>Landscape A4 (wide bill${c.businessType==='medicine'?' — shows Mfr, Lot, Mfg, Disc ₹, Taxable, GST ₹ columns':''})</option>
+        </select>
+        <div class="desc" style="margin-top:4px;">Choose, then click “Save Company Details”. Applies to GST invoices${c.businessType==='medicine'?' and medicine bills':''}.</div>
       </div>
       <div class="field"><label>Shop / Company Name</label><input type="text" id="c-name" value="${esc(c.name)}"></div>
       <div class="field"><label>Address</label><textarea id="c-address" rows="2">${esc(c.address)}</textarea></div>
@@ -4009,8 +4079,8 @@ function doSaveEditedPurchase(){
 /* Per-company bill layout. Stored in state.company.bill (saved with the company, so every
    company has its own layout). Missing keys fall back to these defaults. */
 const BILL_DEFAULTS = {
-  fitA4:true, moves:{},
-  itemsHeight:120, buyerHeight:0, bottomHeight:0,
+  fitA4:true, moves:{}, colW:{},
+  itemsHeight:120, itemsHeightL:60, buyerHeight:0, bottomHeight:0,
   titleHeight:0, headerHeight:0, tableHeadHeight:0, itemRowHeight:0, subtotalHeight:0, cgstHeight:0, sgstHeight:0,
   discountHeight:0, roundHeight:0, totalHeight:0, wordsHeight:0, hsnHeadHeight:0, hsnRowHeight:0, taxWordsHeight:0,
   jurisHeight:0, footerHeight:0, itemFontSize:11, itemBold:false, totalFontSize:11, totalBold:true,
@@ -4027,6 +4097,9 @@ const BILL_HEIGHT_KEYS = Object.keys(BILL_DEFAULTS).filter(k=>/Height$/.test(k))
 function billCfg(c){
   const o = Object.assign({}, BILL_DEFAULTS, (c && c.bill) || {});
   o.moves = (o.moves && typeof o.moves==='object') ? o.moves : {};
+  { const cw = (o.colW && typeof o.colW==='object') ? o.colW : {}, n = {};
+    ['p','l'].forEach(k=>{ const a = cw[k]; if(Array.isArray(a) && a.length && a.every(v=>isFinite(Number(v)) && Number(v)>=1 && Number(v)<=80)) n[k] = a.map(Number); });
+    o.colW = n; }
   { const f = Number(o.itemFontSize); o.itemFontSize = isFinite(f) && f>=6 ? Math.min(f,24) : 11; o.itemBold = !!o.itemBold; const t = Number(o.totalFontSize); o.totalFontSize = isFinite(t) && t>=6 ? Math.min(t,24) : 11; o.totalBold = !!o.totalBold; }
   BILL_HEIGHT_KEYS.forEach(k=>{ const n = Number(o[k]); o[k] = isFinite(n) && n>=0 ? Math.min(n,600) : BILL_DEFAULTS[k]; });
   return o;
@@ -4081,6 +4154,7 @@ function gstInvoiceHtml(s, c){
   const mv = k => ` data-mv="${k}"` + (mvT(k) ? ` style="${mvT(k)}"` : '');   // movable paragraph
   const hd = k => bc[k] ? ` style="height:${bc[k]}px;overflow:hidden;"` : '';          // blocks
   const NC = 6 + (bc.showHsnColumn?1:0) + (bc.showDiscColumn?1:0);
+  const LAND = c.medOrient === 'landscape';
   const taxRate = Number(c.gstRate)||18;
   const halfRate = taxRate/2;
   let taxableSum = 0;
@@ -4136,12 +4210,14 @@ function gstInvoiceHtml(s, c){
   if(c.stateName) buyerLines.push('State Name: '+esc(c.stateName)+(c.stateCode?(', Code: '+esc(c.stateCode)):''));
   if(s.customerPhone) buyerLines.push('Contact: '+esc(s.customerPhone));
 
+  const buyerCell = `<td data-bl="buyerHeight" style="width:28%;vertical-align:top;${bc.buyerHeight?`height:${bc.buyerHeight}px;`:''}"><div${mv('buyerBlock')}><div class="gi-label">Buyer (Bill to)</div>
+          <div class="gi-strong">${buyerLines.join('<br>')}</div>${bc.showPaymentMode?`<div style="margin-top:4px;"><span class="gi-label">Payment Mode</span> ${esc(s.paymentMode||'-')}</div>`:''}</div></td>`;
   return `
   <div id="gst-invoice">
     <div class="gi-title${bc.titleHeight?' sized':''}" data-bl="titleHeight"${hd('titleHeight')}>${esc(bc.title||'TAX INVOICE')}</div>
     <table class="gi-tbl">
       <tr data-bl="headerHeight"${hr('headerHeight')}>
-        <td style="width:56%;">
+        <td style="width:${LAND?'38':'56'}%;">
           <div data-mv="sellerBlock" style="display:flex;gap:12px;align-items:flex-start;${mvT('sellerBlock')}">
           ${bc.showLogo?logoImgHtml(c):''}<div>
           <div class="gi-shopname">${esc(c.name||'My Shop')}</div>
@@ -4155,6 +4231,7 @@ function gstInvoiceHtml(s, c){
           </div>
           </div>
         </td>
+        ${LAND?buyerCell:''}
         <td>
           <div><span class="gi-label">Invoice No.</span><br><span class="gi-strong">${esc(s.invoiceNo)}</span></div>
           <div style="margin-top:6px;"><span class="gi-label">Reference No. &amp; Date.</span></div>
@@ -4164,9 +4241,9 @@ function gstInvoiceHtml(s, c){
           <div style="margin-top:6px;"><span class="gi-label">Other References</span></div>
         </td>
       </tr>
-      <tr>
-        <td data-bl="buyerHeight"${bc.showPaymentMode?'':' colspan="3"'}${bc.buyerHeight?` style="height:${bc.buyerHeight}px;vertical-align:top;"`:''}>
-          <div${mv('buyerBlock')}><div class="gi-label">Buyer (Bill to)</div>
+      <tr${LAND?' style="display:none"':''}>
+        <td${LAND?'':' data-bl="buyerHeight"'}${bc.showPaymentMode?'':' colspan="3"'}${bc.buyerHeight?` style="height:${bc.buyerHeight}px;vertical-align:top;"`:''}>
+          <div${LAND?'':mv('buyerBlock')}><div class="gi-label">Buyer (Bill to)</div>
           <div class="gi-strong">${buyerLines.join('<br>')}</div></div>
         </td>
         ${bc.showPaymentMode?`<td colspan="2" style="vertical-align:top;"><span class="gi-label">Payment Mode</span><br>${esc(s.paymentMode||'-')}</td>`:''}
@@ -4188,7 +4265,7 @@ function gstInvoiceHtml(s, c){
       </thead>
       <tbody>
         ${rows.map(r=>r.row).join('')}
-        <tr><td colspan="${NC}" data-bl="itemsHeight" style="height:${bc.itemsHeight}px; border-left:1px solid #000; border-right:1px solid #000;">&nbsp;</td></tr>
+        <tr><td colspan="${NC}" data-bl="${LAND?'itemsHeightL':'itemsHeight'}" style="height:${LAND?bc.itemsHeightL:bc.itemsHeight}px; border-left:1px solid #000; border-right:1px solid #000;">&nbsp;</td></tr>
         <tr class="gi-tot" data-bl="subtotalHeight"${hr('subtotalHeight')}><td colspan="${NC-1}" style="text-align:right;">&nbsp;</td><td class="num">${money(taxableSum)}</td></tr>
         <tr class="gi-tot" data-bl="cgstHeight"${hr('cgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">CGST</td><td class="num">${money(cgst)}</td></tr>
         <tr class="gi-tot" data-bl="sgstHeight"${hr('sgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">SGST</td><td class="num">${money(sgst)}</td></tr>
@@ -4207,11 +4284,13 @@ function gstInvoiceHtml(s, c){
       </tbody>
     </table>
 
+    ${LAND?'<div style="display:flex;align-items:stretch;"><div class="gi-land-l" style="width:40%;display:flex;flex-direction:column;">':''}
     ${bc.showAmountWords?`<div class="gi-words" data-bl="wordsHeight"${hd('wordsHeight')}>
       <div${mv('amtWordsBlock')}><div class="lbl">Amount Chargeable (in words)</div>
       <div class="gi-strong">${amountInWords(s.total)}</div></div>
     </div>`:''}
 
+    ${LAND?'</div><div class="gi-land-r" style="flex:1;margin-left:-1px;">':''}
     ${(bc.showHsnSummary && hsnRows) ? `
     <table class="gi-tbl" style="margin-top:-1px;">
       <thead><tr data-bl="hsnHeadHeight"${hr('hsnHeadHeight')}>
@@ -4224,6 +4303,7 @@ function gstInvoiceHtml(s, c){
       <div${mv('taxWordsBlock')}><div class="lbl">Tax Amount (in words)</div>
       <div class="gi-strong">${amountInWords(totalTax)}</div></div>
     </div>`:''}
+    ${LAND?'</div></div>':''}
 
     ${(bc.showPan || (bc.showDeclaration && bc.declarationText) || bc.terms || bc.showBank || bc.showSignature) ? `<div class="gi-bottom" data-bl="bottomHeight"${bc.bottomHeight?` style="height:${bc.bottomHeight}px;overflow:hidden;"`:''}>
       ${(bc.showPan || (bc.showDeclaration && bc.declarationText) || bc.terms) ? `<div class="qr-col">
@@ -4260,9 +4340,10 @@ function printInvoice(saleId){
   const c = state.company;
   const useGst = !!(c.gst && c.gst.trim());
   const html = useGst ? gstInvoiceHtml(s, c) : plainInvoiceHtml(s, c);
-  const FW = useGst ? 820 : 620;
+  const land = useGst && c.medOrient === 'landscape';
+  const FW = land ? 1100 : (useGst ? 820 : 620);
   const modal = document.getElementById('modal-root');
-  modal.innerHTML = `<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:${useGst?'820px':'620px'};">
+  modal.innerHTML = `<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:${FW}px;">
     <div class="modal-head no-print"><h2>Bill Preview</h2>
       <div>
         <button class="btn sm" data-action="wa-send" data-id="${s.id}" style="background:#25D366;border-color:#1da851;color:#fff;">WhatsApp</button>
@@ -4273,6 +4354,7 @@ function printInvoice(saleId){
     <div id="bill-fit-wrap" style="overflow:hidden;position:relative;"><div id="bill-fit-sheet" style="width:${FW}px;">${html}</div></div>
   </div></div>`;
   attachModalHandlers();
+  medPageStyle(land ? 'landscape' : null);
   // shrink the bill to the screen width on phones (printing is unaffected)
   const fw = modal.querySelector('#bill-fit-wrap'), fs = modal.querySelector('#bill-fit-sheet');
   const fit = ()=>{
@@ -4354,26 +4436,27 @@ async function buildBillPdf(s, c){
   const isMed = isMedSale(s);
   const useGst = isMed || !!(c.gst && c.gst.trim());
   const html = isMed ? medInvoiceHtml(s, c) : (useGst ? gstInvoiceHtml(s, c) : plainInvoiceHtml(s, c));
+  const land = (isMed || useGst) && c.medOrient === 'landscape', BASEW = land ? 1100 : (useGst?820:620);
   const host = document.createElement('div');
   // Keep the sheet inside the page (not off-screen / fixed): Android Chrome renders off-screen fixed nodes as blank in html2canvas.
-  host.style.cssText = 'position:absolute;left:0;top:0;background:#fff;width:' + (useGst?820:620) + 'px;z-index:-1;pointer-events:none;';
+  host.style.cssText = 'position:absolute;left:0;top:0;background:#fff;width:' + BASEW + 'px;z-index:-1;pointer-events:none;';
   host.innerHTML = html;
   document.body.appendChild(host);
   try{
     if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
     const el = host.firstElementChild;
     el.style.maxWidth = 'none';
-    fitContentWidth(host, useGst?820:620);
+    fitContentWidth(host, BASEW);
     // wait for images (logo / signature / seal) to finish decoding
     await Promise.all([...host.querySelectorAll('img')].map(im=> (im.complete && im.naturalWidth) ? null : new Promise(r=>{ im.onload = im.onerror = r; setTimeout(r, 3000); })));
     await new Promise(r=> requestAnimationFrame(()=> requestAnimationFrame(r)));
-    const BW = Math.max(useGst?820:620, host.scrollWidth), BH = Math.max(el.offsetHeight, host.scrollHeight);
+    const BW = Math.max(BASEW, host.scrollWidth), BH = Math.max(el.offsetHeight, host.scrollHeight);
     let sc = 2; while(sc > 1 && BW*sc*BH*sc > 12000000) sc -= 0.25;   // stay under mobile canvas size limits
     const canvas = await window.html2canvas(el, { scale:sc, backgroundColor:'#ffffff', useCORS:true, logging:false,
       scrollX:0, scrollY:0, x:0, y:0, width:BW, height:BH, windowWidth:BW, windowHeight:BH });
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
-    const pageW = 210, pageH = 297, m = 8;
+    const pdf = new jsPDF({ unit:'mm', format:'a4', orientation: land ? 'landscape' : 'portrait' });
+    const pageW = land ? 297 : 210, pageH = land ? 210 : 297, m = 8;
     const maxW = pageW - 2*m, maxH = pageH - 2*m;
     let w = maxW, h = canvas.height / canvas.width * w;
     if(h > maxH){ h = maxH; w = canvas.width / canvas.height * h; }   // shrink so everything fits on one page
@@ -4432,7 +4515,7 @@ async function showBillViewer(id){
     sale._sig = d.sig || { sign:'', seal:'' };
     const isMed = isMedSale(sale);
     const useGst = isMed || !!(c.gst && c.gst.trim());
-    W = useGst ? 820 : 620;
+    W = ((isMed || useGst) && c.medOrient === 'landscape') ? 1100 : (useGst ? 820 : 620);
     sheet.innerHTML = isMed ? medInvoiceHtml(sale, c) : (useGst ? gstInvoiceHtml(sale, c) : plainInvoiceHtml(sale, c));
     document.title = (sale.invoiceNo||'Bill') + ' — ' + (c.name||'Bill');
     fit();
@@ -4566,6 +4649,7 @@ function attachHandlers(){
       logo: companyLogoDraft !== null ? companyLogoDraft : (state.company.logo||''),
       bill: readBillCfgForm(),
       businessType: state.company.businessType || '',
+      medOrient: (document.getElementById('c-orient') ? document.getElementById('c-orient').value : (state.company.medOrient||'portrait')),
       dlNo: (document.getElementById('c-dlno') ? document.getElementById('c-dlno').value.trim() : (state.company.dlNo||'')),
     };
     companyLogoDraft = null;
@@ -5065,10 +5149,11 @@ function syncProductImeiField(prod){
 
 /* Modal helpers */
 function openModal(html){
+  if(typeof medPageStyle==='function') medPageStyle(null);
   document.getElementById('modal-root').innerHTML = html;
   attachModalHandlers();
 }
-function closeModal(){ document.getElementById('modal-root').innerHTML = ''; }
+function closeModal(){ if(typeof medPageStyle==='function') medPageStyle(null); document.getElementById('modal-root').innerHTML = ''; }
 
 function attachModalHandlers(){
   const root = document.getElementById('modal-root');
@@ -6625,7 +6710,7 @@ function medSaveBill(){
     used[b.id] = (used[b.id]||0) + pq;
     if(used[b.id] > medBatchStock(b,mp) + 1e-9){ alert('Row '+n+' ('+md.name+'): batch '+b.batch+' has only '+medQtyStr(medBatchStock(b,mp),md)+' in stock.'); return; }
     const l = medLine(q, r.mrp, r.disc, r.gst);
-    items.push({ medId:md.id, batchId:b.id, name:md.name, hsn:md.hsn||'', pack:((md.pack||'')+' '+(md.unit||'')).trim(), batch:b.batch, lot:b.lot||'', mfg:b.mfg||'', exp:b.exp, mrp:Number(r.mrp), qty:q,
+    items.push({ medId:md.id, batchId:b.id, name:md.name, mfr:md.mfr||'', hsn:md.hsn||'', pack:((md.pack||'')+' '+(md.unit||'')).trim(), batch:b.batch, lot:b.lot||'', mfg:b.mfg||'', exp:b.exp, mrp:Number(r.mrp), qty:q,
       loose:!!r.loose, unitName: r.loose ? (md.looseUnit||'Loose') : '', perPack:Number(md.perPack)||0, packQty:pq,
       disc:Math.min(100,Math.max(0,Number(r.disc)||0)), gst:Number(r.gst)||0, taxable:r2(l.taxable), tax:r2(l.tax), amount:r2(l.net), cost:Number(b.rate)||0 });
   }
@@ -6719,59 +6804,112 @@ function medViewReports(){
 }
 
 /* ---------- Invoice (print) ---------- */
+function medPageStyle(orient){
+  let st = document.getElementById('med-page-style');
+  if(!orient){ if(st) st.remove(); return; }
+  if(!st){ st = document.createElement('style'); st.id = 'med-page-style'; document.head.appendChild(st); }
+  st.dataset.orient = orient;
+  st.textContent = '@media print{ @page{ size:A4 ' + orient + '; margin:8mm; } }';
+}
 function medInvoiceHtml(s, c){
-  const NC = 11, hasGst = !!(c.gst && c.gst.trim());
-  const itemRows = s.items.map((it,i)=>`<tr class="gi-item"><td class="center">${i+1}</td>
-    <td><strong>${esc(it.name)}</strong></td><td class="center">${esc(it.hsn||'')}</td><td class="center">${it.loose?('Loose '+esc(it.unitName||'')):esc(it.pack||'')}</td>
-    <td>${esc(it.batch)}${it.lot?`<div style="font-size:9px;color:#444;">Lot: ${esc(it.lot)}</div>`:''}</td><td class="center">${medFmtExp(it.exp)}</td>
-    <td class="num">${money(it.mrp)}</td><td class="center">${it.qty}${it.loose?' '+esc(it.unitName||''):''}</td><td class="center">${it.disc?it.disc+'%':'-'}</td><td class="center">${it.gst}%</td><td class="num">${money(it.amount)}</td></tr>`).join('');
+  const bc = billCfg(c), hh = k => bc[k] ? ` style="height:${bc[k]}px;"` : '';
+  const land = c.medOrient === 'landscape', hasGst = !!(c.gst && c.gst.trim());
+  const NC = land ? 17 : 11, before = land ? 10 : 7, after = land ? 5 : 2;
+  const itemRows = s.items.map((it,i)=>{
+    const dAmt = r2(it.qty*it.mrp - it.amount);
+    const pack = it.loose ? ('Loose '+esc(it.unitName||'')) : esc(it.pack||'');
+    const qty = it.qty + (it.loose ? ' '+esc(it.unitName||'') : '');
+    const batch = esc(it.batch) + ((!land && it.lot) ? `<div style="font-size:9px;color:#444;">Lot: ${esc(it.lot)}</div>` : '');
+    if(!land) return `<tr class="gi-item" data-bl="itemRowHeight" style="${bc.itemRowHeight?`height:${bc.itemRowHeight}px;`:''}--ifs:${bc.itemFontSize}px;--ifw:${bc.itemBold?700:400};"><td class="center">${i+1}</td><td><strong>${esc(it.name)}</strong></td><td class="center">${esc(it.hsn||'')}</td><td class="center">${pack}</td>
+      <td>${batch}</td><td class="center">${medFmtExp(it.exp)}</td><td class="num">${money(it.mrp)}</td><td class="center">${qty}</td><td class="center">${it.disc?it.disc+'%':'-'}</td><td class="center">${it.gst}%</td><td class="num">${money(it.amount)}</td></tr>`;
+    return `<tr class="gi-item" data-bl="itemRowHeight" style="${bc.itemRowHeight?`height:${bc.itemRowHeight}px;`:''}--ifs:${bc.itemFontSize}px;--ifw:${bc.itemBold?700:400};"><td class="center">${i+1}</td><td><strong>${esc(it.name)}</strong></td><td>${esc(it.mfr||'')}</td><td class="center">${esc(it.hsn||'')}</td><td class="center">${pack}</td>
+      <td>${batch}</td><td>${esc(it.lot||'')}</td><td class="center">${medFmtExp(it.mfg)}</td><td class="center">${medFmtExp(it.exp)}</td><td class="num">${money(it.mrp)}</td><td class="center">${qty}</td>
+      <td class="center">${it.disc?it.disc+'%':'-'}</td><td class="num">${dAmt?money(dAmt):'-'}</td><td class="num">${money(it.taxable)}</td><td class="center">${it.gst}%</td><td class="num">${money(it.tax)}</td><td class="num">${money(it.amount)}</td></tr>`;
+  }).join('');
+  const head = land
+    ? [['Sl',3],['Description of Medicine',16],['Mfr.',7],['HSN',5],['Pack',5],['Batch',7],['Lot',5],['Mfg',5],['Exp.',5],['MRP / Rate',6],['Qty',5],['Disc %',4],['Disc ₹',5],['Taxable',6],['GST %',4],['GST ₹',5],['Amount',7]]
+    : [['Sl',4],['Description of Medicine',24],['HSN',7],['Pack',8],['Batch',11],['Exp.',7],['MRP / Rate',9],['Qty',7],['Disc %',6],['GST',6],['Amount',11]];
+  { const sv = bc.colW && bc.colW[land?'l':'p']; if(sv && sv.length===head.length) head.forEach((h,i)=>{ h[1] = sv[i]; }); }
   const byRate = {};
   s.items.forEach(it=>{ const g = byRate[it.gst] = byRate[it.gst] || { taxable:0, tax:0 }; g.taxable += it.taxable; g.tax += it.tax; });
   const rates = Object.keys(byRate).sort((a,b)=>a-b);
   const totalQty = s.items.reduce((a,it)=>a+(it.loose?0:it.qty),0), looseQty = s.items.reduce((a,it)=>a+(it.loose?it.qty:0),0);
-  const row = (label, val, bold)=> `<tr class="gi-tot"><td colspan="${NC-1}" style="text-align:right;${bold?'font-weight:700;':''}">${label}</td><td class="num" ${bold?'style="font-weight:700;"':''}>${val}</td></tr>`;
-  const cell = 'padding:4px 5px;';
+  const row = (label, val, key)=> `<tr class="gi-tot"${key?` data-bl="${key}"${hh(key)}`:''}><td colspan="${NC-1}" style="text-align:right;">${label}</td><td class="num">${money(val).replace(/^/,'')}</td></tr>`;
+  const bt = 'border-top:1px solid #000;';
+  const afterCells = land
+    ? `<td style="${bt}"></td><td class="num" style="${bt}">${s.discount>0?money(s.discount):''}</td><td class="num" style="${bt}">${money(s.taxable)}</td><td style="${bt}"></td><td class="num" style="${bt}">${money(s.tax)}</td>`
+    : `<td colspan="2" style="${bt}"></td>`;
   return `
-  <div id="gst-invoice" style="font-size:11px;">
-    <div class="gi-title">${hasGst?'TAX INVOICE':'CASH / CREDIT MEMO'}</div>
-    <table class="gi-tbl"><tr>
-      <td style="width:56%;"><div style="display:flex;gap:12px;align-items:flex-start;">${c.logo?logoImgHtml(c):''}<div>
+  <div id="gst-invoice" style="font-size:${land?10.5:11}px;">
+    <div class="gi-title" data-bl="titleHeight"${bc.titleHeight?` style="height:${bc.titleHeight}px;"`:''}>${hasGst?'TAX INVOICE':'CASH / CREDIT MEMO'}</div>
+    <table class="gi-tbl"><tr data-bl="headerHeight"${hh('headerHeight')}>
+      <td style="width:${land?'52':'56'}%;vertical-align:top;"><div style="display:flex;gap:12px;align-items:flex-start;">${c.logo?logoImgHtml(c):''}<div>
         <div class="gi-shopname">${esc(c.name||'Pharmacy')}</div>
         <div class="gi-shopmeta">${esc(c.address||'')}${c.address?'<br>':''}${c.phone?('Ph: '+esc(c.phone)+'<br>'):''}${c.gst?('GSTIN: '+esc(c.gst)+'<br>'):''}${c.dlNo?('<strong>D.L. No.: '+esc(c.dlNo)+'</strong><br>'):''}${c.stateName?('State: '+esc(c.stateName)+(c.stateCode?(', Code: '+esc(c.stateCode)):'')+'<br>'):''}${c.email?('E-Mail: '+esc(c.email)):''}</div></div></div></td>
-      <td><span class="gi-label">Invoice No.</span><br><span class="gi-strong">${esc(s.invoiceNo)}</span></td>
+      ${land ? `<td style="width:34%;vertical-align:top;"><span class="gi-label">Patient / Customer (Bill to)</span><br><span class="gi-strong">${esc(s.customer||'Walk-in Customer')}</span>${s.address?'<br>'+esc(s.address):''}${s.phone?'<br>Contact: '+esc(s.phone):''}</td>
+      <td style="width:14%;vertical-align:top;"><span class="gi-label">Invoice No.</span><br><span class="gi-strong">${esc(s.invoiceNo)}</span><br><span class="gi-label">Dated</span><br><span class="gi-strong">${fmtDate(s.date)}</span><br><span class="gi-label">Doctor</span> <span class="gi-strong">${esc(s.doctor||'-')}</span><br><span class="gi-label">Payment</span> <span class="gi-strong">${esc(s.mode||'-')}</span></td></tr></table>` : `<td><span class="gi-label">Invoice No.</span><br><span class="gi-strong">${esc(s.invoiceNo)}</span></td>
       <td><span class="gi-label">Dated</span><br><span class="gi-strong">${fmtDate(s.date)}</span></td></tr>
-      <tr><td><span class="gi-label">Patient / Customer (Bill to)</span><br><span class="gi-strong">${esc(s.customer||'Walk-in Customer')}</span>${s.address?'<br>'+esc(s.address):''}${s.phone?'<br>Contact: '+esc(s.phone):''}</td>
-      <td colspan="2"><span class="gi-label">Doctor</span> <span class="gi-strong">${esc(s.doctor||'-')}</span><br><span class="gi-label">Payment mode</span> <span class="gi-strong">${esc(s.mode||'-')}</span></td></tr></table>
-    <table class="gi-tbl items-tbl">
-      <thead><tr><th style="width:4%;">Sl</th><th>Description of Medicine</th><th style="width:7%;">HSN</th><th style="width:8%;">Pack</th><th style="width:11%;">Batch</th><th style="width:7%;">Exp.</th><th style="width:9%;">MRP</th><th style="width:7%;">Qty</th><th style="width:6%;">Disc %</th><th style="width:6%;">GST</th><th style="width:11%;">Amount</th></tr></thead>
+      <tr data-bl="buyerHeight"${hh('buyerHeight')}><td style="vertical-align:top;"><span class="gi-label">Patient / Customer (Bill to)</span><br><span class="gi-strong">${esc(s.customer||'Walk-in Customer')}</span>${s.address?'<br>'+esc(s.address):''}${s.phone?'<br>Contact: '+esc(s.phone):''}</td>
+      <td colspan="2"><span class="gi-label">Doctor</span> <span class="gi-strong">${esc(s.doctor||'-')}</span><br><span class="gi-label">Payment mode</span> <span class="gi-strong">${esc(s.mode||'-')}</span></td></tr></table>`}
+    <table class="gi-tbl items-tbl" style="table-layout:fixed;--tfs:${bc.totalFontSize}px;--tfw:${bc.totalBold?700:400};">
+      <thead><tr data-bl="tableHeadHeight"${hh('tableHeadHeight')}>${head.map((h,i)=>`<th data-ci="${i}"${h[1]?` style="width:${h[1]}%;"`:''}>${h[0]}</th>`).join('')}</tr></thead>
       <tbody>${itemRows}
-        <tr><td colspan="${NC}" data-bl="itemsHeight" style="height:60px;border-left:1px solid #000;border-right:1px solid #000;">&nbsp;</td></tr>
-        ${row('Total MRP value', money(s.gross))}
-        ${s.discount>0?row('Less: Discount', '(-) '+money(s.discount)):''}
-        ${row('Taxable value', money(s.taxable))}
-        ${row('CGST', money(s.tax/2))}${row('SGST', money(s.tax/2))}
-        ${Math.abs(s.roundOff)>=0.005?row('Round off', (s.roundOff<0?'(-) ':'')+money(Math.abs(s.roundOff))):''}
-        <tr class="gi-tot gi-grand"><td style="border-top:1px solid #000;"></td><td style="border-top:1px solid #000;">Total</td><td colspan="5" style="border-top:1px solid #000;"></td><td class="center" style="border-top:1px solid #000;">${totalQty?totalQty+' pk':''}${totalQty&&looseQty?' + ':''}${looseQty?looseQty+' lse':''}</td><td colspan="2" style="border-top:1px solid #000;"></td><td class="num" style="border-top:1px solid #000;">Rs ${money(s.total)}</td></tr>
+        <tr><td colspan="${NC}" data-bl="itemsHeight" style="height:${bc.itemsHeight}px;border-left:1px solid #000;border-right:1px solid #000;">&nbsp;</td></tr>
+        ${land ? '' : `        ${row('Total MRP value', s.gross)}
+        ${s.discount>0?`<tr class="gi-tot" data-bl="discountHeight"${hh('discountHeight')}><td colspan="${NC-1}" style="text-align:right;">Less: Discount</td><td class="num">(-) ${money(s.discount)}</td></tr>`:''}
+        ${row('Taxable value', s.taxable, 'subtotalHeight')}
+        ${row('CGST', s.tax/2, 'cgstHeight')}${row('SGST', s.tax/2, 'sgstHeight')}
+        ${Math.abs(s.roundOff)>=0.005?`<tr class="gi-tot" data-bl="roundHeight"${hh('roundHeight')}><td colspan="${NC-1}" style="text-align:right;">Round off</td><td class="num">${s.roundOff<0?'(-) ':''}${money(Math.abs(s.roundOff))}</td></tr>`:''}
+`}
+        <tr class="gi-tot gi-grand" data-bl="totalHeight"${hh('totalHeight')}><td style="${bt}"></td><td style="${bt}">Total</td><td colspan="${before-2}" style="${bt}"></td><td class="center" style="${bt}">${totalQty?totalQty+' pk':''}${totalQty&&looseQty?' + ':''}${looseQty?looseQty+' lse':''}</td>${afterCells}<td class="num" style="${bt}">Rs ${money(s.total)}</td></tr>
       </tbody></table>
-    <div class="gi-words"><div class="lbl">Amount Chargeable (in words)</div><div class="gi-strong">${amountInWords(s.total)}</div></div>
-    <table class="gi-tbl" style="margin-top:-1px;"><thead><tr><th>GST %</th><th>Taxable Value</th><th>CGST Rate</th><th>CGST Amt</th><th>SGST Rate</th><th>SGST Amt</th><th>Total Tax</th></tr></thead><tbody>
-      ${rates.map(k=>`<tr><td>${k}%</td><td class="num">${money(byRate[k].taxable)}</td><td class="center">${k/2}%</td><td class="num">${money(byRate[k].tax/2)}</td><td class="center">${k/2}%</td><td class="num">${money(byRate[k].tax/2)}</td><td class="num">${money(byRate[k].tax)}</td></tr>`).join('')}</tbody></table>
-    <div class="gi-bottom">
+    ${land ? `
+    <div class="gi-cmp" data-bl="bottomHeight" style="display:flex;align-items:flex-start;border:1px solid #000;border-top:none;font-size:calc(var(--tfs,11px) - 1px);line-height:1.3;--tfs:${bc.totalFontSize}px;${bc.bottomHeight?`height:${bc.bottomHeight}px;overflow:hidden;`:''}">
+      <div style="width:29%;padding:4px 6px;border-right:1px solid #000;">
+        <div class="gi-label">Amount Chargeable (in words)</div><div class="gi-strong">${amountInWords(s.total)}</div>
+        ${c.pan?`<div style="margin-top:3px;"><span class="gi-label">PAN:</span> <span class="gi-strong">${esc(c.pan)}</span></div>`:''}
+        <div style="font-size:8.5px;line-height:1.25;margin-top:3px;">MRP is inclusive of all taxes. Check batch &amp; expiry before leaving the counter. Medicines once sold will not be taken back or exchanged. Schedule H/H1 drugs only against a valid prescription.</div></div>
+      <div style="width:25%;padding:4px 6px;border-right:1px solid #000;">
+        <table style="width:100%;border-collapse:collapse;font-size:inherit;"><thead><tr><th style="text-align:left;">GST%</th><th style="text-align:right;">Taxable</th><th style="text-align:right;">CGST</th><th style="text-align:right;">SGST</th></tr></thead><tbody>
+        ${rates.map(k=>`<tr><td>${k}%</td><td style="text-align:right;">${money(byRate[k].taxable)}</td><td style="text-align:right;">${money(byRate[k].tax/2)}</td><td style="text-align:right;">${money(byRate[k].tax/2)}</td></tr>`).join('')}</tbody></table></div>
+      <div style="width:20%;padding:4px 6px;border-right:1px solid #000;">
+        <table style="width:100%;border-collapse:collapse;font-size:inherit;">
+        <tr><td>Total MRP value</td><td style="text-align:right;">${money(s.gross)}</td></tr>
+        ${s.discount>0?`<tr><td>Less: Discount</td><td style="text-align:right;">(-) ${money(s.discount)}</td></tr>`:''}
+        <tr><td>Taxable value</td><td style="text-align:right;">${money(s.taxable)}</td></tr>
+        <tr><td>CGST</td><td style="text-align:right;">${money(s.tax/2)}</td></tr>
+        <tr><td>SGST</td><td style="text-align:right;">${money(s.tax/2)}</td></tr>
+        ${Math.abs(s.roundOff)>=0.005?`<tr><td>Round off</td><td style="text-align:right;">${s.roundOff<0?'(-) ':''}${money(Math.abs(s.roundOff))}</td></tr>`:''}
+        </table></div>
+      <div style="flex:1;padding:4px 6px;display:flex;flex-direction:column;justify-content:space-between;">
+        <div>${(c.bankName||c.bankAccNo)?`<strong>Bank Details</strong><br>${c.bankAccName?'A/c Holder: '+esc(c.bankAccName)+'<br>':''}${c.bankName?'Bank: '+esc(c.bankName)+'<br>':''}${c.bankAccNo?'A/c No.: '+esc(c.bankAccNo)+'<br>':''}${c.bankIFSC?'IFSC: '+esc(c.bankIFSC):''}`:''}</div>
+        <div style="text-align:right;margin-top:4px;">for ${esc(c.name||'')}${sigBlockHtml(s)||'<br>'}Authorised Signatory</div></div>
+    </div>
+    ` : `
+    <div class="gi-words" data-bl="wordsHeight"${bc.wordsHeight?` style="height:${bc.wordsHeight}px;overflow:hidden;"`:''}><div class="lbl">Amount Chargeable (in words)</div><div class="gi-strong">${amountInWords(s.total)}</div></div>
+    <table class="gi-tbl" style="margin-top:-1px;"><thead><tr data-bl="hsnHeadHeight"${hh('hsnHeadHeight')}><th>GST %</th><th>Taxable Value</th><th>CGST Rate</th><th>CGST Amt</th><th>SGST Rate</th><th>SGST Amt</th><th>Total Tax</th></tr></thead><tbody>
+      ${rates.map(k=>`<tr data-bl="hsnRowHeight"${hh('hsnRowHeight')}><td>${k}%</td><td class="num">${money(byRate[k].taxable)}</td><td class="center">${k/2}%</td><td class="num">${money(byRate[k].tax/2)}</td><td class="center">${k/2}%</td><td class="num">${money(byRate[k].tax/2)}</td><td class="num">${money(byRate[k].tax)}</td></tr>`).join('')}</tbody></table>
+    <div class="gi-bottom" data-bl="bottomHeight"${bc.bottomHeight?` style="height:${bc.bottomHeight}px;overflow:hidden;"`:''}>
       <div class="qr-col">${c.pan?`<div class="gi-label">Company's PAN</div><div class="gi-strong">${esc(c.pan)}</div>`:''}
         <div class="gi-label" style="margin-top:8px;">Terms &amp; Declaration</div>
         <div style="font-size:9.5px;line-height:1.4;">MRP is inclusive of all taxes. Please check batch &amp; expiry before leaving the counter. Medicines once sold will not be taken back or exchanged. Schedule H/H1 drugs are sold against a valid prescription only.</div></div>
       <div class="bank-col"><div class="bank-details">${(c.bankName||c.bankAccNo)?`<strong>Company's Bank Details</strong><br>${c.bankAccName?'A/c Holder: '+esc(c.bankAccName)+'<br>':''}${c.bankName?'Bank: '+esc(c.bankName)+'<br>':''}${c.bankAccNo?'A/c No.: '+esc(c.bankAccNo)+'<br>':''}${c.bankIFSC?'Branch &amp; IFSC: '+esc(c.bankIFSC):''}`:''}</div>
         <div class="gi-sign">for ${esc(c.name||'')}${sigBlockHtml(s)||'<br><br><br>'}Authorised Signatory</div></div></div>
-    <div class="gi-footer">${c.jurisdiction?esc(c.jurisdiction)+' · ':''}This is a Computer Generated Invoice</div>
+    `}
+    <div class="gi-footer" data-bl="jurisHeight"${bc.jurisHeight?` style="height:${bc.jurisHeight}px;overflow:hidden;"`:''}>${c.jurisdiction?esc(c.jurisdiction)+' · ':''}This is a Computer Generated Invoice</div>
   </div>`;
 }
 function medPrintBill(id){
   const s = medEnsure().sales.find(x=>x.id===id); if(!s) return;
-  const FW = 820, modal = document.getElementById('modal-root');
+  const orient = state.company.medOrient === 'landscape' ? 'landscape' : 'portrait';
+  const FW = orient==='landscape' ? 1100 : 820, modal = document.getElementById('modal-root');
   modal.innerHTML = `<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:${FW}px;">
-    <div class="modal-head no-print"><h2>Bill Preview — ${esc(s.invoiceNo)}</h2><div><button class="btn sm" data-med="bill-wa" data-id="${s.id}" style="background:#25D366;border-color:#1da851;color:#fff;">WhatsApp</button> <button class="btn sm primary" data-action="do-print">Print</button><button class="modal-close" data-close="modal" style="margin-left:8px;">&times;</button></div></div>
+    <div class="modal-head no-print"><h2>Bill Preview — ${esc(s.invoiceNo)}</h2><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <select id="med-orient" data-mf="o-orient" data-id="${s.id}" title="Paper layout" style="min-height:32px;padding:2px 8px;"><option value="portrait" ${orient==='portrait'?'selected':''}>Portrait (A4)</option><option value="landscape" ${orient==='landscape'?'selected':''}>Landscape (A4)</option></select>
+      <button class="btn sm" data-med="bill-wa" data-id="${s.id}" style="background:#25D366;border-color:#1da851;color:#fff;">WhatsApp</button> <button class="btn sm primary" data-action="do-print">Print</button><button class="modal-close" data-close="modal" style="margin-left:2px;">&times;</button></div></div>
     <div id="bill-fit-wrap" style="overflow:hidden;position:relative;"><div id="bill-fit-sheet" style="width:${FW}px;">${medInvoiceHtml(s, state.company)}</div></div></div></div>`;
   attachModalHandlers();
+  medPageStyle(orient);
   const fw = modal.querySelector('#bill-fit-wrap'), fs = modal.querySelector('#bill-fit-sheet');
   const fit = ()=>{ if(!fw.isConnected) return; fs.style.setProperty('--bs',1); const sc = Math.min(1, fw.clientWidth / FW); fs.style.setProperty('--bs', sc); fw.style.height = Math.ceil(fs.offsetHeight*sc)+'px'; };
   fit(); setTimeout(fit,250); window.addEventListener('resize', fit);
@@ -6891,6 +7029,7 @@ function medAct(a, el){
   }
 }
 function medField(f, el, type){
+  if(f==='o-orient'){ state.company.medOrient = el.value; saveState(); medPrintBill(el.dataset.id); return; }
   const d = medDraft, v = el.value, i = Number(el.dataset.i);
   switch(f){
     case 'b-cust': d.customer = v; break;
