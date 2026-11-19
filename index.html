@@ -12,6 +12,8 @@
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --bg:#EAF1FB;
@@ -2359,11 +2361,49 @@ function emptyState(title, sub){
 /* =========================================================
    COMPANY SETUP
    ========================================================= */
+let companyLogoDraft = null;   // null = unchanged, '' = removed, data URL = newly chosen
+function logoImgHtml(c){
+  return (c && c.logo) ? `<img src="${esc(c.logo)}" alt="" style="max-height:64px;max-width:120px;object-fit:contain;flex-shrink:0;">` : '';
+}
+function readLogoFile(file){
+  return new Promise((res, rej)=>{
+    const fr = new FileReader();
+    fr.onerror = ()=> rej(new Error('Could not read the image.'));
+    fr.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=> rej(new Error('That file is not a valid image.'));
+      img.onload = ()=>{
+        const sc = Math.min(1, 300 / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(img.width*sc)); cv.height = Math.max(1, Math.round(img.height*sc));
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        let out = cv.toDataURL('image/png');
+        if(out.length > 200000){           // keep the shop data small
+          ctx.globalCompositeOperation = 'destination-over'; ctx.fillStyle = '#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+          out = cv.toDataURL('image/jpeg', 0.85);
+        }
+        res(out);
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
 function viewCompany(){
   const c = state.company;
+  const shownLogo = companyLogoDraft !== null ? companyLogoDraft : (c.logo||'');
   return `
     <div class="pagehead"><div><h1>Company Setup</h1><div class="desc">This appears on every printed bill</div></div></div>
     <div class="card" style="max-width:640px;">
+      <div class="field"><label>Company Logo (printed at the top-left of every bill)</label>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div id="c-logo-box" style="width:120px;height:70px;border:1px dashed var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;">${shownLogo ? `<img src="${esc(shownLogo)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain;">` : '<span style="font-size:11px;color:var(--ink-soft);">No logo</span>'}</div>
+          <input type="file" id="c-logo-file" accept="image/*" style="max-width:230px;">
+          <button class="btn sm danger" type="button" id="c-logo-remove">Remove</button>
+        </div>
+        <div class="desc" style="margin-top:4px;">PNG or JPG. Click “Save Company Details” after choosing.</div>
+      </div>
       <div class="field"><label>Shop / Company Name</label><input type="text" id="c-name" value="${esc(c.name)}"></div>
       <div class="field"><label>Address</label><textarea id="c-address" rows="2">${esc(c.address)}</textarea></div>
       <div class="grid cols-2">
@@ -2740,6 +2780,7 @@ function viewSales(){
       <div style="max-height:70vh;overflow:auto;"><table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th class="num">Total</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead><tbody id="saved-bills-body">
       ${recent.map(s=>`<tr><td>${fmtDate(s.date)}</td><td class="num">${s.invoiceNo}</td><td>${esc(s.customer||'Walk-in')}</td><td class="num">${money(s.total)}</td><td class="num">${money(s.paid)}</td><td>${dueStatusPill(effectiveSaleDue(s))}</td><td style="text-align:right; white-space:nowrap;">
         <button class="btn sm ghost" data-action="print-sale" data-id="${s.id}">Print</button>
+        <button class="btn sm ghost" data-action="wa-sale" data-id="${s.id}" style="color:#1da851;">WhatsApp</button>
         ${isAdmin() ? ` <button class="btn sm ghost" data-action="edit-sale" data-id="${s.id}">Edit</button> <button class="btn sm danger" data-action="del-sale" data-id="${s.id}">Delete</button>` : ''}
       </td></tr>`).join('')}
       </tbody></table></div>`}
@@ -2982,6 +3023,7 @@ function printStatement(type, key, name, phone){
   modal.innerHTML = `<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:680px;">
     <div class="modal-head no-print"><h2>Statement Preview</h2>
       <div>
+        <button class="btn sm" data-action="wa-send" data-id="${s.id}" style="background:#25D366;border-color:#1da851;color:#fff;">WhatsApp</button>
         <button class="btn sm primary" data-action="do-print">Print</button>
         <button class="modal-close" data-close="modal" style="margin-left:8px;">&times;</button>
       </div>
@@ -2989,6 +3031,8 @@ function printStatement(type, key, name, phone){
     ${html}
   </div></div>`;
   attachModalHandlers();
+  const waBtn = modal.querySelector('[data-action="wa-send"]');
+  if(waBtn) waBtn.addEventListener('click', ()=> sendBillWhatsApp(waBtn.dataset.id));
 }
 
 /* =========================================================
@@ -3587,9 +3631,11 @@ function plainInvoiceHtml(s, c){
   return `
   <div id="invoice-paper">
     <div class="inv-head">
-      <div>
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        ${logoImgHtml(c)}<div>
         <div class="shopname">${esc(c.name||'My Mobile Shop')}</div>
         <div class="shopmeta">${esc(c.address||'')}${c.address?'<br>':''}${c.phone?('Ph: '+esc(c.phone)+' '):''}${c.email?esc(c.email):''}${c.gst?('<br>GSTIN: '+esc(c.gst)):''}</div>
+        </div>
       </div>
       <div class="inv-tag">
         <div class="no">${esc(s.invoiceNo)}</div>
@@ -3609,8 +3655,6 @@ function plainInvoiceHtml(s, c){
       <div class="r"><span>Subtotal</span><span>${money(s.subtotal)}</span></div>
       <div class="r"><span>Discount</span><span>- ${money(s.discount)}</span></div>
       <div class="r grand"><span>Total</span><span>${money(s.total)}</span></div>
-      <div class="r"><span>Paid (${esc(s.paymentMode)})</span><span>${money(s.paid)}</span></div>
-      <div class="r"><span>Balance Due</span><span>${money(due)}</span></div>
     </div>
     <div class="footnote">Thank you for shopping with ${esc(c.name||'us')}. Please retain this bill for warranty/service claims.</div>
   </div>`;
@@ -3682,6 +3726,8 @@ function gstInvoiceHtml(s, c){
     <table class="gi-tbl">
       <tr>
         <td style="width:56%;">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+          ${logoImgHtml(c)}<div>
           <div class="gi-shopname">${esc(c.name||'My Shop')}</div>
           <div class="gi-shopmeta">
             ${esc(c.address||'')}${c.address?'<br>':''}
@@ -3689,6 +3735,8 @@ function gstInvoiceHtml(s, c){
             ${c.gst?('GSTIN/UIN: '+esc(c.gst)+'<br>'):''}
             ${c.stateName?('State Name: '+esc(c.stateName)+(c.stateCode?(', Code: '+esc(c.stateCode)):'')+'<br>'):''}
             ${c.email?('E-Mail: '+esc(c.email)):''}
+          </div>
+          </div>
           </div>
         </td>
         <td>
@@ -3763,11 +3811,7 @@ function gstInvoiceHtml(s, c){
 
     <div class="gi-bottom">
       <div class="qr-col">
-        <div class="gi-label">Paid</div>
-        <div>${money(s.paid)}</div>
-        <div class="gi-label" style="margin-top:6px;">Balance Due</div>
-        <div class="gi-strong">${money(due)}</div>
-        <div class="gi-label" style="margin-top:10px;">Company's PAN</div>
+        <div class="gi-label">Company's PAN</div>
         <div class="gi-strong">${esc(c.pan||'-')}</div>
         <div class="gi-label" style="margin-top:10px;">Declaration</div>
         <div style="font-size:10px;">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
@@ -3812,6 +3856,194 @@ function printInvoice(saleId){
   attachModalHandlers();
 }
 
+
+/* =========================================================
+   WHATSAPP BILL  — bill text + PDF download link
+   Flow: render bill -> PDF -> upload to Firebase Storage -> wa.me link
+   ========================================================= */
+function waDigits(p){
+  let d = String(p||'').replace(/\D/g,'');
+  if(d.length===11 && d[0]==='0') d = d.slice(1);
+  if(d.length===10) d = '91' + d;          // Indian mobile without country code
+  return d;
+}
+function billWaText(s, c, url){
+  const due = (Number(s.total)||0) - (Number(s.paid)||0);
+  const L = [];
+  L.push('*' + (c.name||'My Mobile Shop') + '*');
+  L.push('Hello ' + (s.customer||'Customer') + ', thank you for your purchase!');
+  L.push('Bill ' + s.invoiceNo + ' | ' + fmtDate(s.date));
+  L.push('Total: ' + money(s.total));
+  if(url){ L.push(''); L.push('Download your bill (PDF):'); L.push(url); }
+  return L.join('\n');
+}
+async function buildBillPdf(s, c){
+  if(!window.html2canvas || !window.jspdf) throw new Error('PDF library could not load. Check your internet connection.');
+  const useGst = !!(c.gst && c.gst.trim());
+  const html = useGst ? gstInvoiceHtml(s, c) : plainInvoiceHtml(s, c);
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;width:' + (useGst?820:620) + 'px;z-index:-1;';
+  host.innerHTML = html;
+  document.body.appendChild(host);
+  try{
+    if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+    const el = host.firstElementChild;
+    const canvas = await window.html2canvas(el, { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+    const pageW = 210, pageH = 297, m = 8;
+    const imgW = pageW - 2*m;
+    const pxPerMm = canvas.width / imgW;
+    const sliceH = Math.floor((pageH - 2*m) * pxPerMm);
+    let y = 0, first = true;
+    while(y < canvas.height){
+      const h = Math.min(sliceH, canvas.height - y);
+      const part = document.createElement('canvas');
+      part.width = canvas.width; part.height = h;
+      const ctx = part.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,part.width,h);
+      ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+      if(!first) pdf.addPage();
+      pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', m, m, imgW, h / pxPerMm);
+      y += h; first = false;
+    }
+    return pdf.output('blob');
+  } finally { host.remove(); }
+}
+async function saveBillSnapshot(s, c){
+  const rnd = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const prodIds = new Set(s.items.map(it=>it.productId));
+  const unitIds = new Set(); s.items.forEach(it=>(it.imeiUnitIds||[]).forEach(id=>unitIds.add(id)));
+  const snap = {
+    createdAt: todayISO(),
+    sale: s,
+    company: c,
+    products: (state.products||[]).filter(p=>prodIds.has(p.id)).map(p=>({ id:p.id, name:p.name, hsn:p.hsn||'', imei:p.imei||'' })),
+    imeiUnits: (state.imeiUnits||[]).filter(u=>unitIds.has(u.id)).map(u=>({ id:u.id, imei:u.imei }))
+  };
+  const clean = JSON.parse(JSON.stringify(snap));   // drops undefined (Firestore rejects it)
+  const task = setDoc(doc(db, 'publicBills', rnd), clean);
+  const timeout = new Promise((_,rej)=> setTimeout(()=>rej(new Error('Timed out. Check internet / Firestore rules.')), 20000));
+  await Promise.race([task, timeout]);
+  if(location.protocol === 'file:') throw new Error('Open the app from its hosted web address (not a local file) so the link works for customers.');
+  return location.origin + location.pathname + '?bill=' + rnd;
+}
+
+/* Customer-facing page: opened from the WhatsApp link (?bill=ID). No login needed. */
+async function showBillViewer(id){
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  const v = document.createElement('div');
+  v.id = 'bill-view';
+  v.style.cssText = 'min-height:100vh;padding:16px;background:#EAF1FB;';
+  v.innerHTML = '<div style="max-width:860px;margin:0 auto;"><div id="bv-bar" style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;"></div><div id="bv-body" style="text-align:center;padding:40px 0;color:#5C7089;">Loading your bill…</div></div>';
+  document.body.appendChild(v);
+  const body = v.querySelector('#bv-body'), bar = v.querySelector('#bv-bar');
+  try{
+    const snap = await getDoc(doc(db, 'publicBills', id));
+    if(!snap.exists()) throw new Error('This bill link is invalid or has been removed.');
+    const d = snap.data();
+    state.company = d.company || {};
+    state.products = d.products || [];
+    state.imeiUnits = d.imeiUnits || [];
+    const sale = d.sale, c = state.company;
+    const useGst = !!(c.gst && c.gst.trim());
+    body.style.cssText = 'overflow-x:auto;';
+    body.innerHTML = useGst ? gstInvoiceHtml(sale, c) : plainInvoiceHtml(sale, c);
+    document.title = (sale.invoiceNo||'Bill') + ' — ' + (c.name||'Bill');
+    bar.innerHTML = '<button class="btn primary" id="bv-dl" type="button">Download PDF</button><button class="btn" id="bv-print" type="button">Print</button>';
+    bar.querySelector('#bv-print').onclick = ()=> window.print();
+    const dl = bar.querySelector('#bv-dl');
+    dl.onclick = async()=>{
+      dl.disabled = true; dl.textContent = 'Preparing…';
+      try{
+        const blob = await buildBillPdf(sale, c);
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = String(sale.invoiceNo||'bill') + '.pdf';
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+      }catch(e){ alert('Could not create PDF: ' + (e.message||e)); }
+      dl.disabled = false; dl.textContent = 'Download PDF';
+    };
+  }catch(e){
+    body.innerHTML = '<p style="color:#C0334A;">' + esc(e.message||e) + '</p>';
+  }
+}
+async function sendBillWhatsApp(saleId){
+  const s = state.sales.find(x=>x.id===saleId);
+  if(!s) return;
+  const c = state.company;
+  // customer number comes from the bill; fall back to the customer directory by name
+  let custPhone = s.customerPhone || '';
+  if(!custPhone && s.customer){
+    const cu = (state.customers||[]).find(x=>(x.name||'').trim().toLowerCase()===s.customer.trim().toLowerCase() && x.phone);
+    if(cu) custPhone = cu.phone;
+  }
+  const autoDigits = waDigits(custPhone);
+  const autoOk = autoDigits.length >= 10;
+  // open the tab now (inside the tap) so the browser allows it; it is pointed at WhatsApp once the link is ready
+  let waWin = null;
+  if(autoOk){ try{ waWin = window.open('', '_blank'); }catch(e){ waWin = null; } }
+  const old = document.getElementById('wa-root'); if(old) old.remove();
+  const root = document.createElement('div');
+  root.id = 'wa-root';
+  root.innerHTML = '<div class="modal-bg" style="z-index:9999;"><div class="modal" data-stop style="max-width:480px;">' +
+    '<div class="modal-head"><h2>Send bill on WhatsApp</h2><button class="modal-close" id="wa-x">&times;</button></div>' +
+    '<div id="wa-body" style="padding:4px 2px;"></div></div></div>';
+  document.body.appendChild(root);
+  const body = root.querySelector('#wa-body');
+  const close = ()=> root.remove();
+  root.querySelector('#wa-x').onclick = close;
+  root.querySelector('.modal-bg').addEventListener('click', e=>{ if(e.target.classList.contains('modal-bg')) close(); });
+
+  body.innerHTML = '<p style="margin:14px 0;">Opening WhatsApp for <strong>' + esc(s.customer||'customer') + '</strong> — bill <strong>' + esc(s.invoiceNo) + '</strong>…</p>';
+  let blob, url = '', upErr = '';
+  try{ blob = await buildBillPdf(s, c); }
+  catch(e){ body.innerHTML = '<p style="color:var(--bad);">Could not create PDF: ' + esc(e.message||e) + '</p>'; return; }
+  body.innerHTML = '<p style="margin:14px 0;">Creating bill link…</p>';
+  try{ url = await saveBillSnapshot(s, c); }
+  catch(e){ upErr = (e && e.message) ? e.message : String(e); }
+
+  if(waWin && !upErr && url){
+    waWin.location.href = 'https://wa.me/' + autoDigits + '?text=' + encodeURIComponent(billWaText(s, c, url));
+    root.remove();
+    return;
+  }
+  if(waWin){ try{ waWin.close(); }catch(e){} }
+  const fileName = String(s.invoiceNo||'bill') + '.pdf';
+  const canShareFile = !!(navigator.canShare && navigator.canShare({ files:[new File([blob], fileName, { type:'application/pdf' })] }));
+  body.innerHTML =
+    (upErr ? '<div style="background:var(--bad-bg);color:var(--bad);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-bottom:10px;">Bill link could not be created (' + esc(upErr) + '). The message below has no link — use “Download PDF” and attach it in WhatsApp.</div>'
+           : '<div style="background:var(--good-bg);color:var(--good);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-bottom:10px;">Bill link created. The customer opens it and taps “Download PDF”.</div>') +
+    '<div class="field"><label>Customer WhatsApp number</label><input type="tel" id="wa-phone" placeholder="10-digit mobile (91 is added automatically)" value="' + esc(custPhone) + '"></div>' +
+    '<div class="field"><label>Message</label><textarea id="wa-msg" rows="10" style="font-size:12.5px;"></textarea></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      '<a class="btn primary" id="wa-go" target="_blank" rel="noopener" style="text-decoration:none;">Open WhatsApp</a>' +
+      '<button class="btn" id="wa-dl" type="button">Download PDF</button>' +
+      (canShareFile ? '<button class="btn" id="wa-share" type="button">Share PDF file</button>' : '') +
+      (url ? '<button class="btn" id="wa-copy" type="button">Copy link</button>' : '') +
+    '</div>';
+  const phoneInp = body.querySelector('#wa-phone'), msgInp = body.querySelector('#wa-msg'), go = body.querySelector('#wa-go');
+  msgInp.value = billWaText(s, c, url);
+  const refresh = ()=>{
+    const d = waDigits(phoneInp.value);
+    go.href = 'https://wa.me/' + d + '?text=' + encodeURIComponent(msgInp.value);
+  };
+  phoneInp.addEventListener('input', refresh);
+  msgInp.addEventListener('input', refresh);
+  refresh();
+  body.querySelector('#wa-dl').onclick = ()=>{
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  };
+  const shareBtn = body.querySelector('#wa-share');
+  if(shareBtn) shareBtn.onclick = async()=>{
+    try{ await navigator.share({ files:[new File([blob], fileName, { type:'application/pdf' })], text: msgInp.value }); }catch(e){}
+  };
+  const copyBtn = body.querySelector('#wa-copy');
+  if(copyBtn) copyBtn.onclick = async()=>{
+    try{ await navigator.clipboard.writeText(url); copyBtn.textContent = 'Copied ✓'; }catch(e){ prompt('Copy this link:', url); }
+  };
+}
+
 /* =========================================================
    EVENT HANDLING
    ========================================================= */
@@ -3840,8 +4072,27 @@ function attachHandlers(){
       bankName: document.getElementById('c-bankname').value.trim(),
       bankAccNo: document.getElementById('c-bankaccno').value.trim(),
       bankIFSC: document.getElementById('c-bankifsc').value.trim(),
+      logo: companyLogoDraft !== null ? companyLogoDraft : (state.company.logo||''),
     };
+    companyLogoDraft = null;
     saveState(); render();
+  });
+
+  const logoFile = main.querySelector('#c-logo-file');
+  const logoBox = main.querySelector('#c-logo-box');
+  if(logoFile) logoFile.addEventListener('change', async()=>{
+    const f = logoFile.files && logoFile.files[0];
+    if(!f) return;
+    try{
+      companyLogoDraft = await readLogoFile(f);
+      logoBox.innerHTML = '<img src="' + companyLogoDraft + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain;">';
+    }catch(e){ alert(e.message || e); }
+  });
+  const logoRemove = main.querySelector('#c-logo-remove');
+  if(logoRemove) logoRemove.addEventListener('click', ()=>{
+    companyLogoDraft = '';
+    logoBox.innerHTML = '<span style="font-size:11px;color:var(--ink-soft);">No logo</span>';
+    if(logoFile) logoFile.value = '';
   });
 
   // Products
@@ -4025,6 +4276,7 @@ function attachHandlers(){
   if(saDiscountInp) saDiscountInp.addEventListener('input', e=> saleCustomerDraft.discount = e.target.value);
   if(saModeInp) saModeInp.addEventListener('change', e=> saleCustomerDraft.mode = e.target.value);
   main.querySelectorAll('[data-action="print-sale"]').forEach(b=>b.addEventListener('click', ()=> printInvoice(b.dataset.id)));
+  main.querySelectorAll('[data-action="wa-sale"]').forEach(b=>b.addEventListener('click', ()=> sendBillWhatsApp(b.dataset.id)));
   main.querySelectorAll('[data-action="edit-sale"]').forEach(b=>b.addEventListener('click', ()=> openEditSale(b.dataset.id)));
   main.querySelectorAll('[data-action="del-sale"]').forEach(b=>b.addEventListener('click', ()=> doDeleteSale(b.dataset.id)));
   main.querySelectorAll('[data-action="edit-purchase"]').forEach(b=>b.addEventListener('click', ()=> openEditPurchase(b.dataset.id)));
@@ -4810,6 +5062,8 @@ async function handleConsoleClick(e){
    INIT
    ========================================================= */
 (function initAuth(){
+  const billId = new URLSearchParams(location.search).get('bill');
+  if(billId){ showBillViewer(billId); return; }
   const loginScreen = document.getElementById('login-screen');
   const appRoot = document.getElementById('app');
   const errBox = document.getElementById('login-error');
