@@ -3935,10 +3935,10 @@ async function showBillViewer(id){
   document.getElementById('app').style.display = 'none';
   const v = document.createElement('div');
   v.id = 'bill-view';
-  v.style.cssText = 'min-height:100vh;padding:16px;background:#EAF1FB;';
-  v.innerHTML = '<div style="max-width:860px;margin:0 auto;"><div id="bv-bar" style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px;"></div><div id="bv-body" style="text-align:center;padding:40px 0;color:#5C7089;">Loading your bill…</div></div>';
+  v.style.cssText = 'min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:#EAF1FB;';
+  v.innerHTML = '<div id="bv-card" style="width:100%;max-width:380px;background:#fff;border:1px solid #DCE6F5;border-radius:14px;box-shadow:0 6px 18px rgba(21,34,56,.10);padding:28px 22px;text-align:center;"><div style="color:#5C7089;">Loading your bill…</div></div>';
   document.body.appendChild(v);
-  const body = v.querySelector('#bv-body'), bar = v.querySelector('#bv-bar');
+  const card = v.querySelector('#bv-card');
   try{
     const snap = await getDoc(doc(db, 'publicBills', id));
     if(!snap.exists()) throw new Error('This bill link is invalid or has been removed.');
@@ -3947,24 +3947,29 @@ async function showBillViewer(id){
     state.products = d.products || [];
     state.imeiUnits = d.imeiUnits || [];
     const sale = d.sale, c = state.company;
-    const useGst = !!(c.gst && c.gst.trim());
-    body.style.cssText = 'overflow-x:auto;';
-    body.innerHTML = useGst ? gstInvoiceHtml(sale, c) : plainInvoiceHtml(sale, c);
     document.title = (sale.invoiceNo||'Bill') + ' — ' + (c.name||'Bill');
-    bar.innerHTML = '<button class="btn primary" id="bv-dl" type="button">Download PDF</button><button class="btn" id="bv-print" type="button">Print</button>';
-    bar.querySelector('#bv-print').onclick = ()=> window.print();
-    const dl = bar.querySelector('#bv-dl');
+    card.innerHTML =
+      (c.logo ? '<img src="' + esc(c.logo) + '" alt="" style="max-height:70px;max-width:160px;object-fit:contain;margin-bottom:10px;">' : '') +
+      '<div style="font-family:\'Zilla Slab\',Georgia,serif;font-size:21px;font-weight:700;color:#152238;">' + esc(c.name||'Your Bill') + '</div>' +
+      '<div style="margin:16px 0 4px;color:#5C7089;font-size:13px;">Bill No. <strong style="color:#152238;">' + esc(sale.invoiceNo||'') + '</strong> &nbsp;·&nbsp; ' + esc(fmtDate(sale.date)) + '</div>' +
+      '<div style="font-size:28px;font-weight:700;color:#152238;margin:6px 0 20px;">' + esc(money(sale.total)) + '</div>' +
+      '<button class="btn primary" id="bv-dl" type="button" style="width:100%;justify-content:center;padding:14px 16px;font-size:16px;">Download PDF</button>' +
+      '<div id="bv-msg" style="margin-top:12px;font-size:12px;color:#5C7089;">Thank you for your purchase!</div>';
+    const dl = card.querySelector('#bv-dl'), msg = card.querySelector('#bv-msg');
     dl.onclick = async()=>{
-      dl.disabled = true; dl.textContent = 'Preparing…';
+      dl.disabled = true; dl.textContent = 'Preparing PDF…';
       try{
         const blob = await buildBillPdf(sale, c);
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = String(sale.invoiceNo||'bill') + '.pdf';
-        document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+        const fname = String(sale.invoiceNo||'bill') + '.pdf';
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href), 60000);
+        msg.textContent = 'Your bill PDF is downloading. Check your Downloads / Files.';
       }catch(e){ alert('Could not create PDF: ' + (e.message||e)); }
       dl.disabled = false; dl.textContent = 'Download PDF';
     };
   }catch(e){
-    body.innerHTML = '<p style="color:#C0334A;">' + esc(e.message||e) + '</p>';
+    card.innerHTML = '<p style="color:#C0334A;margin:0;">' + esc(e.message||e) + '</p>';
   }
 }
 async function sendBillWhatsApp(saleId){
