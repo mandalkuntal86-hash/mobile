@@ -1258,6 +1258,9 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
   #invoice-paper thead, #gst-invoice thead{ display:table-header-group; }
   @page{ size:A4; margin:10mm; }
 }
+#bill-fit-sheet #gst-invoice, #bv-sheet #gst-invoice{ max-width:none !important; }
+@media screen{ #bill-fit-sheet{ transform-origin:0 0; transform:scale(var(--bs,1)); } }
+@media print{ #bill-fit-wrap{ height:auto !important; overflow:visible !important; } #bill-fit-sheet{ width:100% !important; transform:none !important; } }
 </style>
 </head>
 
@@ -3023,7 +3026,6 @@ function printStatement(type, key, name, phone){
   modal.innerHTML = `<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:680px;">
     <div class="modal-head no-print"><h2>Statement Preview</h2>
       <div>
-        <button class="btn sm" data-action="wa-send" data-id="${s.id}" style="background:#25D366;border-color:#1da851;color:#fff;">WhatsApp</button>
         <button class="btn sm primary" data-action="do-print">Print</button>
         <button class="modal-close" data-close="modal" style="margin-left:8px;">&times;</button>
       </div>
@@ -3031,8 +3033,6 @@ function printStatement(type, key, name, phone){
     ${html}
   </div></div>`;
   attachModalHandlers();
-  const waBtn = modal.querySelector('[data-action="wa-send"]');
-  if(waBtn) waBtn.addEventListener('click', ()=> sendBillWhatsApp(waBtn.dataset.id));
 }
 
 /* =========================================================
@@ -3843,17 +3843,34 @@ function printInvoice(saleId){
   const c = state.company;
   const useGst = !!(c.gst && c.gst.trim());
   const html = useGst ? gstInvoiceHtml(s, c) : plainInvoiceHtml(s, c);
+  const FW = useGst ? 820 : 620;
   const modal = document.getElementById('modal-root');
   modal.innerHTML = `<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:${useGst?'820px':'620px'};">
     <div class="modal-head no-print"><h2>Bill Preview</h2>
       <div>
+        <button class="btn sm" data-action="wa-send" data-id="${s.id}" style="background:#25D366;border-color:#1da851;color:#fff;">WhatsApp</button>
         <button class="btn sm primary" data-action="do-print">Print</button>
         <button class="modal-close" data-close="modal" style="margin-left:8px;">&times;</button>
       </div>
     </div>
-    ${html}
+    <div id="bill-fit-wrap" style="overflow:hidden;position:relative;"><div id="bill-fit-sheet" style="width:${FW}px;">${html}</div></div>
   </div></div>`;
   attachModalHandlers();
+  // shrink the bill to the screen width on phones (printing is unaffected)
+  const fw = modal.querySelector('#bill-fit-wrap'), fs = modal.querySelector('#bill-fit-sheet');
+  const fit = ()=>{
+    if(!fw.isConnected) return;
+    fs.style.setProperty('--bs', 1);
+    const need = fitContentWidth(fs, FW);
+    const sc = Math.min(1, fw.clientWidth / need);
+    fs.style.setProperty('--bs', sc);
+    fw.style.height = Math.ceil(fs.offsetHeight * sc) + 'px';
+  };
+  fit(); setTimeout(fit, 250);
+  window.addEventListener('resize', fit);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit).catch(()=>{});
+  const waBtn = modal.querySelector('[data-action="wa-send"]');
+  if(waBtn) waBtn.addEventListener('click', ()=> sendBillWhatsApp(waBtn.dataset.id));
 }
 
 
@@ -3877,6 +3894,12 @@ function billWaText(s, c, url){
   if(url){ L.push(''); L.push('Download your bill (PDF):'); L.push(url); }
   return L.join('\n');
 }
+function fitContentWidth(box, base){
+  box.style.width = base + 'px';
+  const need = Math.max(base, box.scrollWidth);
+  if(need > base) box.style.width = need + 'px';
+  return need;
+}
 async function buildBillPdf(s, c){
   if(!window.html2canvas || !window.jspdf) throw new Error('PDF library could not load. Check your internet connection.');
   const useGst = !!(c.gst && c.gst.trim());
@@ -3888,25 +3911,16 @@ async function buildBillPdf(s, c){
   try{
     if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
     const el = host.firstElementChild;
+    el.style.maxWidth = 'none';
+    fitContentWidth(host, useGst?820:620);
     const canvas = await window.html2canvas(el, { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
     const pageW = 210, pageH = 297, m = 8;
-    const imgW = pageW - 2*m;
-    const pxPerMm = canvas.width / imgW;
-    const sliceH = Math.floor((pageH - 2*m) * pxPerMm);
-    let y = 0, first = true;
-    while(y < canvas.height){
-      const h = Math.min(sliceH, canvas.height - y);
-      const part = document.createElement('canvas');
-      part.width = canvas.width; part.height = h;
-      const ctx = part.getContext('2d');
-      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,part.width,h);
-      ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
-      if(!first) pdf.addPage();
-      pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', m, m, imgW, h / pxPerMm);
-      y += h; first = false;
-    }
+    const maxW = pageW - 2*m, maxH = pageH - 2*m;
+    let w = maxW, h = canvas.height / canvas.width * w;
+    if(h > maxH){ h = maxH; w = canvas.width / canvas.height * h; }   // shrink so everything fits on one page
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (pageW - w)/2, m, w, h);
     return pdf.output('blob');
   } finally { host.remove(); }
 }
@@ -3935,10 +3949,20 @@ async function showBillViewer(id){
   document.getElementById('app').style.display = 'none';
   const v = document.createElement('div');
   v.id = 'bill-view';
-  v.style.cssText = 'min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:#EAF1FB;';
-  v.innerHTML = '<div id="bv-card" style="width:100%;max-width:380px;background:#fff;border:1px solid #DCE6F5;border-radius:14px;box-shadow:0 6px 18px rgba(21,34,56,.10);padding:28px 22px;text-align:center;"><div style="color:#5C7089;">Loading your bill…</div></div>';
+  v.style.cssText = 'min-height:100vh;padding:10px 10px 24px;background:#EAF1FB;';
+  v.innerHTML = '<div style="max-width:860px;margin:0 auto;">' +
+    '<div style="position:sticky;top:0;z-index:5;padding:6px 0 10px;background:#EAF1FB;"><button class="btn primary" id="bv-dl" type="button" style="width:100%;justify-content:center;padding:13px 16px;font-size:16px;" disabled>Download PDF</button></div>' +
+    '<div id="bv-wrap" style="background:#fff;border:1px solid #DCE6F5;border-radius:6px;overflow:hidden;position:relative;min-height:80px;"><div id="bv-sheet" style="transform-origin:0 0;"><div style="padding:30px;text-align:center;color:#5C7089;">Loading your bill…</div></div></div></div>';
   document.body.appendChild(v);
-  const card = v.querySelector('#bv-card');
+  const wrap = v.querySelector('#bv-wrap'), sheet = v.querySelector('#bv-sheet'), dl = v.querySelector('#bv-dl');
+  let W = 820;
+  const fit = ()=>{
+    sheet.style.transform = 'none';
+    const need = fitContentWidth(sheet, W);
+    const sc = Math.min(1, wrap.clientWidth / need);
+    sheet.style.transform = 'scale(' + sc + ')';
+    wrap.style.height = Math.ceil(sheet.offsetHeight * sc) + 'px';
+  };
   try{
     const snap = await getDoc(doc(db, 'publicBills', id));
     if(!snap.exists()) throw new Error('This bill link is invalid or has been removed.');
@@ -3947,29 +3971,31 @@ async function showBillViewer(id){
     state.products = d.products || [];
     state.imeiUnits = d.imeiUnits || [];
     const sale = d.sale, c = state.company;
+    const useGst = !!(c.gst && c.gst.trim());
+    W = useGst ? 820 : 620;
+    sheet.innerHTML = useGst ? gstInvoiceHtml(sale, c) : plainInvoiceHtml(sale, c);
     document.title = (sale.invoiceNo||'Bill') + ' — ' + (c.name||'Bill');
-    card.innerHTML =
-      (c.logo ? '<img src="' + esc(c.logo) + '" alt="" style="max-height:70px;max-width:160px;object-fit:contain;margin-bottom:10px;">' : '') +
-      '<div style="font-family:\'Zilla Slab\',Georgia,serif;font-size:21px;font-weight:700;color:#152238;">' + esc(c.name||'Your Bill') + '</div>' +
-      '<div style="margin:16px 0 4px;color:#5C7089;font-size:13px;">Bill No. <strong style="color:#152238;">' + esc(sale.invoiceNo||'') + '</strong> &nbsp;·&nbsp; ' + esc(fmtDate(sale.date)) + '</div>' +
-      '<div style="font-size:28px;font-weight:700;color:#152238;margin:6px 0 20px;">' + esc(money(sale.total)) + '</div>' +
-      '<button class="btn primary" id="bv-dl" type="button" style="width:100%;justify-content:center;padding:14px 16px;font-size:16px;">Download PDF</button>' +
-      '<div id="bv-msg" style="margin-top:12px;font-size:12px;color:#5C7089;">Thank you for your purchase!</div>';
-    const dl = card.querySelector('#bv-dl'), msg = card.querySelector('#bv-msg');
+    fit();
+    window.addEventListener('resize', fit);
+    setTimeout(fit, 300);
+    if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit).catch(()=>{});
+    sheet.querySelectorAll('img').forEach(im=>{ if(!im.complete) im.addEventListener('load', fit); });
+    dl.disabled = false;
     dl.onclick = async()=>{
       dl.disabled = true; dl.textContent = 'Preparing PDF…';
       try{
         const blob = await buildBillPdf(sale, c);
-        const fname = String(sale.invoiceNo||'bill') + '.pdf';
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = String(sale.invoiceNo||'bill') + '.pdf';
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(()=>URL.revokeObjectURL(a.href), 60000);
-        msg.textContent = 'Your bill PDF is downloading. Check your Downloads / Files.';
-      }catch(e){ alert('Could not create PDF: ' + (e.message||e)); }
-      dl.disabled = false; dl.textContent = 'Download PDF';
+        dl.textContent = 'Downloaded ✓ — tap to download again';
+      }catch(e){ alert('Could not create PDF: ' + (e.message||e)); dl.textContent = 'Download PDF'; }
+      dl.disabled = false;
     };
   }catch(e){
-    card.innerHTML = '<p style="color:#C0334A;margin:0;">' + esc(e.message||e) + '</p>';
+    dl.style.display = 'none';
+    wrap.style.height = 'auto';
+    sheet.innerHTML = '<p style="color:#C0334A;padding:20px;margin:0;">' + esc(e.message||e) + '</p>';
   }
 }
 async function sendBillWhatsApp(saleId){
