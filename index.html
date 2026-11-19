@@ -1378,7 +1378,7 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 /* No Firebase Authentication needed — login is handled locally against
    the users list stored in Firestore alongside the shop data. */
 
@@ -1443,7 +1443,7 @@ async function checkUser(list, scope, username, pw){
   if(u.password !== undefined && u.password === pw){ u.passHash = await hashPw(scope, u.username, pw); delete u.password; pwUpgraded = true; return u; }
   return null;
 }
-function resetState(){ state = JSON.parse(JSON.stringify(DEFAULT_STATE)); dataDocRef = null; }
+function resetState(){ state = JSON.parse(JSON.stringify(DEFAULT_STATE)); dataDocRef = null; backupList = null; backupErr = ''; backupBusy = ''; }
 
 function renderConnBadge(){
   const el = document.getElementById('sb-status');
@@ -1468,7 +1468,9 @@ const DEFAULT_STATE = {
   imeiUnits: [],
   categories: [],
   counters: { invoice: 1, purchase: 1 },
-  sigStore: {}
+  sigStore: {},
+  backupEmail: '',
+  backupEmailAuto: true
 };
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
 let activeTab = "dashboard";
@@ -1578,7 +1580,7 @@ async function loadCompany(id){
     const snap = await getDoc(ref);
     if(!snap.exists()) return false;
     state = Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)), snap.data());
-    dataDocRef = ref; fbStatus = 'ok'; fbError = '';
+    dataDocRef = ref; fbStatus = 'ok'; fbError = ''; backupList = null; backupErr = '';
   }catch(e){
     console.error('Company load failed', e);
     fbStatus = 'error'; fbError = e.message || ''; renderConnBadge();
@@ -1976,6 +1978,7 @@ const NAV_ITEMS = [
   { id:'ledger', label:'Customer Ledger', ic:'&#128218;' },
   { id:'reports', label:'Monthly Reports', ic:'&#128202;' },
   { id:'users', label:'Users', ic:'&#128100;', adminOnly:true },
+  { id:'backup', label:'Backup & Restore', ic:'&#128190;', adminOnly:true },
   { id:'company', label:'Company Setup', ic:'&#9881;', adminOnly:true },
 ];
 
@@ -2086,6 +2089,7 @@ function gwItems(){
   ];
   if(isAdmin()) it.splice(3, 0, {l:'Company Setup', t:'company', h:'O'});
   if(isAdmin()) it.push({l:'Users', t:'users', h:'S'});
+  if(isAdmin()) it.push({l:'Backup & Restore', t:'backup', h:'K'});
   it.push({sec:'Reports'}, {l:'Monthly Reports', t:'reports', h:'R'}, {l:'Dashboard', t:'overview', h:'D'}, {pad:1}, {l:'Quit', t:'quit', h:'Q'});
   return it;
 }
@@ -2101,7 +2105,7 @@ function viewGateway(){
 }
 function gwRun(t){
   if(t==='quit'){ const b=document.getElementById('signout-btn'); if(b) b.click(); return; }
-  if((t==='company'||t==='users') && !isAdmin()) return;
+  if((t==='company'||t==='users'||t==='backup') && !isAdmin()) return;
   activeTab = t; render();
 }
 (function initShell(){
@@ -2302,6 +2306,7 @@ function render(){
   else if(activeTab==='ledger') main.innerHTML = viewLedger();
   else if(activeTab==='reports') main.innerHTML = viewReports();
   else if(activeTab==='users') main.innerHTML = isAdmin() ? viewUsers() : viewDashboard();
+  else if(activeTab==='backup') main.innerHTML = isAdmin() ? viewBackup() : viewDashboard();
   if(!isPlatformMode()) attachHandlers();
   if(focusInfo){
     const el = document.getElementById(focusInfo.id);
@@ -4817,6 +4822,9 @@ function attachHandlers(){
   };
   if(reportStartInput) reportStartInput.addEventListener('change', applyReportDates);
   if(reportEndInput) reportEndInput.addEventListener('change', applyReportDates);
+  main.querySelectorAll('[data-bk]').forEach(b=>b.addEventListener('click', ()=> backupAction(b.dataset.bk, b.dataset.id)));
+  const bkFile = main.querySelector('#bk-file');
+  if(bkFile) bkFile.addEventListener('change', ()=>{ const f = bkFile.files && bkFile.files[0]; bkFile.value = ''; if(f) backupFromFile(f); });
   main.querySelectorAll('[data-action="cat-detail"]').forEach(tr=>tr.addEventListener('click', ()=> categoryDetailModal(tr.dataset.cat)));
   const exportCatRepBtn = main.querySelector('[data-action="export-category-report"]');
   if(exportCatRepBtn) exportCatRepBtn.addEventListener('click', exportCategoryReportCsv);
@@ -5340,6 +5348,350 @@ function backToPlatform(){
   resetState(); currentUser.companyId = null; activeTab = 'platform'; saveSession(); render();
 }
 function viewPlatformTab(){ return activeTab==='superadmins' ? viewSuperAdmins() : viewCompanies(); }
+/* =========================================================
+   BACKUP & RESTORE
+   - Download a backup file (.json) any time
+   - Automatic cloud backup once a day (first sign-in of the day), kept for 14 days
+   - Manual cloud backups, and restore from a cloud backup or a file
+   Backups live in Firestore collections "backups" (info) and "backupParts" (the compressed data, split into pieces
+   because one Firestore document is limited to 1 MB). Restoring never changes users / passwords.
+   ========================================================= */
+const BK_KEEP = { auto:14, manual:10, 'pre-restore':5 };
+const BK_CHUNK = 700000;
+let backupList = null, backupLoading = false, backupErr = '', backupBusy = '';
+function bkSnapshotObj(){
+  return { app:'billzen-backup', version:1, companyId:currentUser.companyId, companyName:(state.company&&state.company.name)||'', createdAt:new Date().toISOString(), data: JSON.parse(JSON.stringify(state)) };
+}
+function bkBytesToB64(buf){ const u = new Uint8Array(buf); let s = ''; for(let i=0;i<u.length;i+=0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i+0x8000)); return btoa(s); }
+function bkB64ToBytes(b){ const s = atob(b); const u = new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i] = s.charCodeAt(i); return u; }
+async function bkPack(obj){
+  const json = JSON.stringify(obj);
+  if(window.CompressionStream){
+    try{
+      const cs = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+      return { enc:'gz-b64', data: bkBytesToB64(await new Response(cs).arrayBuffer()) };
+    }catch(e){}
+  }
+  return { enc:'json', data: json };
+}
+async function bkUnpack(enc, data){
+  if(enc === 'gz-b64'){
+    if(!window.DecompressionStream) throw new Error('This browser cannot open compressed backups. Use a recent Chrome.');
+    const ds = new Blob([bkB64ToBytes(data)]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return JSON.parse(await new Response(ds).text());
+  }
+  return JSON.parse(data);
+}
+async function bkList(cid){
+  const snap = await getDocs(query(collection(db, 'backups'), where('companyId', '==', cid)));
+  const out = []; snap.forEach(d=> out.push(Object.assign({ id:d.id }, d.data())));
+  return out.sort((a,b)=> String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+async function bkDelete(meta){
+  for(let i=0;i<(meta.parts||1);i++){ try{ await deleteDoc(doc(db, 'backupParts', meta.id + '__' + i)); }catch(e){} }
+  await deleteDoc(doc(db, 'backups', meta.id));
+}
+async function bkPrune(cid){
+  const list = await bkList(cid);
+  const seen = {};
+  for(const m of list){
+    seen[m.kind] = (seen[m.kind]||0) + 1;
+    if(seen[m.kind] > (BK_KEEP[m.kind] || 10)){ try{ await bkDelete(m); }catch(e){} }
+  }
+}
+async function cloudBackup(kind, idOverride){
+  const cid = currentUser.companyId;
+  const obj = bkSnapshotObj();
+  const pk = await bkPack(obj);
+  const parts = Math.max(1, Math.ceil(pk.data.length / BK_CHUNK));
+  const bid = idOverride || (cid + '__' + new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14) + '__' + kind);
+  for(let i=0;i<parts;i++){
+    await setDoc(doc(db, 'backupParts', bid + '__' + i), { companyId:cid, backupId:bid, i, data: pk.data.slice(i*BK_CHUNK, (i+1)*BK_CHUNK) });
+  }
+  const d = obj.data;
+  await setDoc(doc(db, 'backups', bid), { companyId:cid, kind, createdAt:obj.createdAt, date:localISO(), parts, enc:pk.enc, size:pk.data.length,
+    counts:{ sales:(d.sales||[]).length, purchases:(d.purchases||[]).length, products:(d.products||[]).length, customers:(d.customers||[]).length } });
+  await bkPrune(cid);
+  backupList = null;
+  return bid;
+}
+async function bkFetch(meta){
+  const pieces = [];
+  for(let i=0;i<(meta.parts||1);i++){
+    const sn = await getDoc(doc(db, 'backupParts', meta.id + '__' + i));
+    if(!sn.exists()) throw new Error('Part ' + (i+1) + ' of this backup is missing.');
+    pieces.push(sn.data().data);
+  }
+  return bkUnpack(meta.enc, pieces.join(''));
+}
+// once a day, silently, the first time anyone from the company opens the app
+async function autoBackupIfNeeded(){
+  try{
+    if(!currentUser || currentUser.superAdmin || !currentUser.companyId) return;
+    const cid = currentUser.companyId, today = localISO(), key = 'billzenAutoBk_' + cid;
+    if(localStorage.getItem(key) === today) return;
+    const bid = cid + '__' + today + '__auto';
+    const ex = await getDoc(doc(db, 'backups', bid));
+    if(!ex.exists()){
+      await cloudBackup('auto', bid);
+      if(state.backupEmail && state.backupEmailAuto !== false && mailerConfigured()){ try{ await emailBackup('auto'); }catch(e){ console.warn('Auto email skipped', e); } }
+    }
+    localStorage.setItem(key, today);
+  }catch(e){ console.warn('Auto backup skipped', e); }
+}
+function bkDownloadJson(obj, name){
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj)], { type:'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+function bkFileName(prefix){ return prefix + '-' + (slugify((state.company&&state.company.name)||'company')||'company') + '-' + localISO() + '.json'; }
+async function bkRestoreFromObject(obj){
+  let data = null;
+  if(obj && obj.app === 'billzen-full-backup') data = (obj.companies||{})[currentUser.companyId];
+  else if(obj && obj.app === 'billzen-backup'){
+    if(obj.companyId && obj.companyId !== currentUser.companyId && !currentUser.superAdmin) throw new Error('This backup belongs to a different company.');
+    data = obj.data;
+  } else throw new Error('This is not a Billzen backup file.');
+  if(!data || typeof data !== 'object' || !Array.isArray(data.products) || !Array.isArray(data.sales)) throw new Error('The backup has no data for this company.');
+  const when = obj.createdAt ? new Date(obj.createdAt).toLocaleString('en-IN') : 'unknown date';
+  const ans = prompt('RESTORE will REPLACE all current products, stock, bills, purchases, ledgers and settings with the backup from ' + when + ' (' + data.sales.length + ' bills, ' + data.products.length + ' products).\n\nA safety backup of the current data is saved first. Users and passwords are NOT changed.\n\nType RESTORE to continue:');
+  if(ans === null) return false;
+  if(ans.trim().toUpperCase() !== 'RESTORE') throw new Error('Restore cancelled — you did not type RESTORE.');
+  try{ await cloudBackup('pre-restore'); }catch(e){ throw new Error('Could not save a safety backup first, so nothing was changed. ' + (e.message||e)); }
+  const users = state.users;
+  state = Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)), JSON.parse(JSON.stringify(data)), { users });
+  migrateProductImeiFields(); migrateProductCategoryFields(); migrateProductTrackImeiFields();
+  saveState();
+  backupList = null;
+  render();
+  return true;
+}
+async function loadBackupList(){
+  backupLoading = true; backupErr = '';
+  try{ backupList = await bkList(currentUser.companyId); }
+  catch(e){ backupList = []; backupErr = e.message || String(e); }
+  backupLoading = false;
+  if(activeTab === 'backup') render();
+}
+function viewBackup(){
+  if(backupList === null && !backupLoading) loadBackupList();
+  const list = backupList || [];
+  const last = list[0];
+  const kindPill = k => k==='auto' ? '<span class="pill info">Automatic</span>' : k==='manual' ? '<span class="pill good">Manual</span>' : '<span class="pill neutral">Before restore</span>';
+  const kb = n => Math.max(1, Math.round((Number(n)||0)/1024)) + ' KB';
+  return `
+  <div class="pagehead">
+    <div><h1>Backup &amp; Restore</h1><div class="desc">Protect <strong>${esc(state.company.name||'this company')}</strong>'s data — products, stock, bills, purchases, ledgers and settings</div></div>
+  </div>
+  <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+    <div class="kpi info"><div class="label">Last cloud backup</div><div class="value" style="font-size:18px;">${last ? esc(new Date(last.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})) : (backupLoading?'Loading…':'None yet')}</div></div>
+    <div class="kpi good"><div class="label">Cloud backups kept</div><div class="value">${list.length}</div></div>
+    <div class="kpi"><div class="label">Automatic backup</div><div class="value" style="font-size:18px;">Daily</div><div class="sub">Runs on first sign-in each day, last 14 kept</div></div>
+  </div>
+  <div class="card">
+    <h2>Backup now</h2>
+    ${backupBusy ? `<div class="login-error" style="display:block;background:#e8f0fe;color:#1e40af;border-color:#c7d7fb;">${esc(backupBusy)}</div>` : ''}
+    ${backupErr ? `<div class="login-error" style="display:block;">Could not load cloud backups: ${esc(backupErr)} — check that your Firestore rules allow the "backups" and "backupParts" collections.</div>` : ''}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn primary" data-bk="file-dl">&#8681; Download backup file</button>
+      <button class="btn" data-bk="cloud">&#9729; Back up to cloud now</button>
+      <button class="btn" data-bk="file-pick">&#8679; Restore from file…</button>
+      <input type="file" id="bk-file" accept=".json,application/json" style="display:none;">
+      <button class="btn ghost" data-bk="refresh">&#8635; Refresh list</button>
+    </div>
+    <div class="desc" style="margin-top:10px;">Tip: also download a file every week and keep it on your computer or Google Drive — that copy stays safe even if the online database has a problem.</div>
+  </div>
+  <div class="card">
+    <h2>Cloud backups</h2>
+    ${list.length===0 ? emptyState(backupLoading?'Loading…':'No cloud backups yet','The first automatic backup is made the next time someone signs in, or press “Back up to cloud now”.') : `
+    <div style="overflow-x:auto;"><table style="min-width:640px;"><thead><tr><th>Date &amp; time</th><th>Type</th><th class="num">Bills</th><th class="num">Products</th><th class="num">Size</th><th></th></tr></thead><tbody>
+    ${list.map(m=>`<tr>
+      <td>${esc(new Date(m.createdAt).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</td>
+      <td>${kindPill(m.kind)}</td>
+      <td class="num">${m.counts?m.counts.sales:'-'}</td><td class="num">${m.counts?m.counts.products:'-'}</td><td class="num">${kb(m.size)}</td>
+      <td style="text-align:right;white-space:nowrap;">
+        <button class="btn sm" data-bk="restore" data-id="${esc(m.id)}">Restore</button>
+        <button class="btn sm ghost" data-bk="dl-cloud" data-id="${esc(m.id)}">Download</button>
+        <button class="btn sm danger" data-bk="del" data-id="${esc(m.id)}">Delete</button>
+      </td></tr>`).join('')}
+    </tbody></table></div>`}
+  </div>
+  <div class="card">
+    <h2>Backup on this computer / phone</h2>
+    ${(()=>{
+      if(!localDirLoaded){ localDirLoaded = true; localDirHandle().then(h=>{ localDirName = h ? h.name : ''; if(activeTab==='backup') render(); }); }
+      const lastLocal = localLastDate();
+      const lastTxt = lastLocal ? 'Last local backup on this device: <strong>' + esc(fmtDate(lastLocal)) + '</strong>.' : 'No local backup made on this device yet.';
+      if(fsSupported()) return `
+      <div class="desc" style="margin-bottom:10px;">Pick a folder once (for example <em>Documents\\Billzen Backups</em> or a pen-drive). A backup file is then saved there <strong>automatically every day</strong> in a sub-folder named after the company; the newest ${LOCAL_KEEP} are kept. ${lastTxt}</div>
+      <div class="desc" style="margin-bottom:10px;">Folder: <strong>${localDirName===null?'checking…':(localDirName?esc(localDirName):'not chosen yet')}</strong></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn primary" data-bk="local-pick">&#128193; ${localDirName?'Change folder':'Choose backup folder'}</button>
+        ${localDirName?`<button class="btn" data-bk="local-now">&#128190; Save backup to folder now</button><button class="btn ghost" data-bk="local-forget">Stop automatic local backup</button>`:''}
+      </div>`;
+      return `
+      <div class="desc" style="margin-bottom:10px;">${lastTxt} This browser (phones, iPhone, some browsers) cannot save straight into a chosen folder. Press <strong>Download backup file</strong> above — the file goes to your Downloads folder; then copy it to Google Drive, a pen-drive or your computer. Use Chrome or Edge on a computer to get the automatic daily folder backup.</div>`;
+    })()}
+  </div>
+  <div class="card">
+    <h2>Email backup to Gmail</h2>
+    ${mailerConfigured() ? `
+    <div class="desc" style="margin-bottom:10px;">The backup file is emailed with the subject “Billzen Backup - ${esc(state.company.name||'Company')} - date”, and filed under a label / folder with the company name.</div>
+    <div class="grid cols-2">
+      <div class="field"><label>Send backups to this Gmail address</label><input type="email" id="bk-email" value="${esc(state.backupEmail||'')}" placeholder="yourname@gmail.com" autocomplete="off"></div>
+      <div class="field" style="align-self:end;"><label class="bl-chk"><input type="checkbox" id="bk-email-auto" ${state.backupEmailAuto!==false?'checked':''}> Also email automatically every day</label></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn" data-bk="mail-save">Save</button>
+      <button class="btn primary" data-bk="mail-now">&#9993; Email backup now</button>
+    </div>
+    <div class="imei-hint" style="margin-top:8px;">After pressing “Email backup now”, the mail normally arrives within a minute. Check Spam if you cannot see it.</div>` :
+    `<div class="desc">Email backup is not switched on yet. Ask your platform administrator (super admin) to complete “Email backup setup”.</div>`}
+  </div>
+  <div class="card" style="max-width:700px;">
+    <h3>How restore works</h3>
+    <div style="font-size:13px;color:var(--ink-soft);line-height:1.7;">Restoring replaces the company's data with the chosen backup. Before it does, a “Before restore” backup of the current data is saved, so you can undo a mistaken restore. Users and passwords are never changed by a restore.</div>
+  </div>`;
+}
+async function backupAction(act, id){
+  const setBusy = m => { backupBusy = m; if(activeTab==='backup') render(); };
+  try{
+    if(!isAdmin()) return;
+    if(act === 'file-dl'){ bkDownloadJson(bkSnapshotObj(), bkFileName('billzen-backup')); localMark(); render(); return; }
+    if(act === 'local-pick'){
+      let h; try{ h = await window.showDirectoryPicker({ id:'billzen-backups', mode:'readwrite' }); }catch(e){ if(e && e.name==='AbortError') return; throw e; }
+      await idbSet('root', h); localDirName = h.name; localDirLoaded = true;
+      setBusy('Saving first backup to the folder…'); const where = await localBackupWrite('manual'); setBusy('');
+      try{ localStorage.setItem('billzenLocalAuto_' + currentUser.companyId, localISO()); }catch(e){}
+      alert('Folder set. First backup saved:\n' + h.name + ' / ' + where);
+      return;
+    }
+    if(act === 'local-now'){ setBusy('Saving backup to the folder…'); const where = await localBackupWrite('manual'); setBusy(''); alert('Saved: ' + where); return; }
+    if(act === 'local-forget'){ if(!confirm('Stop saving automatic backups to the folder? (Files already saved stay there.)')) return; await idbDel('root'); localDirName = ''; render(); return; }
+    if(act === 'file-pick'){ const f = document.getElementById('bk-file'); if(f) f.click(); return; }
+    if(act === 'refresh'){ backupList = null; render(); return; }
+    if(act === 'mail-save' || act === 'mail-now'){
+      const em = ((document.getElementById('bk-email')||{}).value || '').trim();
+      const auto = !!(document.getElementById('bk-email-auto')||{}).checked;
+      if(em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ alert('Enter a valid email address.'); return; }
+      state.backupEmail = em; state.backupEmailAuto = auto; saveState();
+      if(act === 'mail-save'){ alert(em ? 'Saved.' : 'Email address cleared.'); return; }
+      await freshPlatform();
+      setBusy('Sending backup email…'); await emailBackup('manual'); setBusy('');
+      alert('Backup email requested for ' + em + '. It should arrive within a minute (check Spam too).');
+      return;
+    }
+    if(act === 'cloud'){ setBusy('Saving backup to the cloud…'); await cloudBackup('manual'); setBusy(''); await loadBackupList(); alert('Cloud backup saved.'); return; }
+    const meta = (backupList||[]).find(m=>m.id===id);
+    if(!meta) return;
+    if(act === 'del'){ if(!confirm('Delete this cloud backup? This cannot be undone.')) return; setBusy('Deleting…'); await bkDelete(meta); setBusy(''); backupList = null; render(); return; }
+    if(act === 'dl-cloud'){ setBusy('Preparing download…'); const obj = await bkFetch(meta); setBusy(''); bkDownloadJson(obj, bkFileName('billzen-backup')); return; }
+    if(act === 'restore'){
+      setBusy('Reading backup…'); const obj = await bkFetch(meta); setBusy('');
+      setBusy('Restoring…'); const ok = await bkRestoreFromObject(obj); setBusy('');
+      if(ok) alert('Restore complete.');
+      return;
+    }
+  }catch(e){ setBusy(''); alert(e.message || String(e)); }
+}
+async function backupFromFile(file){
+  try{
+    const obj = JSON.parse(await file.text());
+    backupBusy = 'Restoring…'; render();
+    const ok = await bkRestoreFromObject(obj);
+    backupBusy = ''; render();
+    if(ok) alert('Restore complete.');
+  }catch(e){ backupBusy = ''; render(); alert(e instanceof SyntaxError ? 'That file is not a valid backup file.' : (e.message || String(e))); }
+}
+/* Email the backup (company-name-wise) through the owner's Google Apps Script mailer — see billzen-backup-mailer.gs */
+function mailerConfigured(){ return !!(platform && platform.mailBackup && platform.mailBackup.url); }
+async function emailBackup(kind){
+  if(!mailerConfigured()) throw new Error('Email backup is not set up yet. Ask the platform administrator (super admin) to complete “Email backup setup”.');
+  const to = (state.backupEmail||'').trim();
+  if(!to) throw new Error('Enter and save the Gmail address first.');
+  const cfg = platform.mailBackup;
+  const obj = bkSnapshotObj(), d = obj.data;
+  const payload = { token: cfg.token||'', to, cc: cfg.copyTo||'', company: obj.companyName || currentUser.companyId, companyId: currentUser.companyId, date: localISO(), kind,
+    filename: bkFileName('billzen-backup'), counts:{ sales:(d.sales||[]).length, purchases:(d.purchases||[]).length, products:(d.products||[]).length, customers:(d.customers||[]).length }, content: JSON.stringify(obj) };
+  // Apps Script web apps do not answer cross-origin reads, so the request is sent "no-cors": delivery cannot be confirmed from here.
+  await fetch(cfg.url, { method:'POST', mode:'no-cors', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+}
+function mailSetupModal(){
+  const c = platform.mailBackup || {};
+  formModal('Email backup setup', [
+    { id:'url', label:'Apps Script web app URL (from billzen-backup-mailer.gs)', ph:'https://script.google.com/macros/s/.../exec', val:c.url||'' },
+    { id:'token', label:'Secret token (same as TOKEN inside the script)', ph:'any long secret word', val:c.token||'' },
+    { id:'copy', label:'Owner copy: also email every company backup to (optional)', type:'email', ph:'yourname@gmail.com', val:c.copyTo||'' },
+  ], 'Save setup', async v=>{
+    const url = v.url.trim();
+    if(url && !/^https:\/\/script\.google\.com\//.test(url)) throw new Error('The URL must start with https://script.google.com/');
+    await mutatePlatform(p=>{ if(url) p.mailBackup = { url, token:v.token.trim(), copyTo:v.copy.trim() }; else delete p.mailBackup; });
+    closeModal(); render();
+  });
+}
+async function downloadAllCompaniesBackup(){
+  await freshPlatform();
+  const companies = {};
+  for(const c of platform.companies){ const sn = await getDoc(companyRef(c.id)); if(sn.exists()) companies[c.id] = sn.data(); }
+  bkDownloadJson({ app:'billzen-full-backup', version:1, createdAt:new Date().toISOString(), platform: JSON.parse(JSON.stringify(platform)), companies }, 'billzen-ALL-companies-' + localISO() + '.json');
+}
+
+/* ---- Local backup (on this computer / phone) ----
+   Desktop Chrome / Edge: pick a folder once; a backup file is written there automatically every day (into a sub-folder named after the company).
+   Phones & other browsers cannot write into a chosen folder, so they use "Download backup file" (goes to the Downloads folder). */
+const LOCAL_KEEP = 30;
+let localDirName = null, localDirLoaded = false, localAutoPending = false;
+function fsSupported(){ return typeof window.showDirectoryPicker === 'function'; }
+function idbOpen(){ return new Promise((res,rej)=>{ const r = indexedDB.open('billzenFS', 1); r.onupgradeneeded = ()=> r.result.createObjectStore('h'); r.onsuccess = ()=> res(r.result); r.onerror = ()=> rej(r.error); }); }
+async function idbGet(k){ const d = await idbOpen(); return new Promise((res,rej)=>{ const q = d.transaction('h').objectStore('h').get(k); q.onsuccess = ()=> res(q.result); q.onerror = ()=> rej(q.error); }); }
+async function idbSet(k, v){ const d = await idbOpen(); return new Promise((res,rej)=>{ const t = d.transaction('h','readwrite'); t.objectStore('h').put(v, k); t.oncomplete = ()=> res(); t.onerror = ()=> rej(t.error); }); }
+async function idbDel(k){ const d = await idbOpen(); return new Promise((res,rej)=>{ const t = d.transaction('h','readwrite'); t.objectStore('h').delete(k); t.oncomplete = ()=> res(); t.onerror = ()=> rej(t.error); }); }
+async function localDirHandle(){ try{ return (await idbGet('root')) || null; }catch(e){ return null; } }
+async function localPerm(h, ask){
+  const o = { mode:'readwrite' };
+  if(await h.queryPermission(o) === 'granted') return true;
+  return !!(ask && await h.requestPermission(o) === 'granted');
+}
+function localMark(){ try{ localStorage.setItem('billzenLocalBk_' + currentUser.companyId, localISO()); }catch(e){} }
+async function localBackupWrite(kind){
+  const h = await localDirHandle();
+  if(!h) throw new Error('Choose a backup folder first.');
+  if(!(await localPerm(h, true))) throw new Error('Permission to use the folder was not given.');
+  const obj = bkSnapshotObj();
+  const cname = String(obj.companyName || currentUser.companyId).replace(/[\\\/:*?"<>|]/g,'-').trim().slice(0,60) || 'Company';
+  const sub = await h.getDirectoryHandle(cname, { create:true });
+  const slug = slugify(obj.companyName) || 'company', now = new Date();
+  const hhmm = String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+  const name = 'billzen-backup-' + slug + '-' + localISO() + (kind==='auto' ? '' : '-' + hhmm) + '.json';
+  const fh = await sub.getFileHandle(name, { create:true });
+  const w = await fh.createWritable(); await w.write(JSON.stringify(obj)); await w.close();
+  try{   // keep only the newest LOCAL_KEEP files
+    const names = [];
+    for await (const [n, hd] of sub.entries()){ if(hd.kind==='file' && /^billzen-backup-.*\.json$/.test(n)) names.push(n); }
+    names.sort();
+    for(const n of names.slice(0, Math.max(0, names.length - LOCAL_KEEP))){ try{ await sub.removeEntry(n); }catch(e){} }
+  }catch(e){}
+  localMark();
+  return cname + ' / ' + name;
+}
+async function autoLocalIfNeeded(){
+  try{
+    if(!fsSupported() || !currentUser || currentUser.superAdmin || !currentUser.companyId) return;
+    const key = 'billzenLocalAuto_' + currentUser.companyId, today = localISO();
+    if(localStorage.getItem(key) === today) return;
+    const h = await localDirHandle(); if(!h) return;
+    if(await localPerm(h, false)){ await localBackupWrite('auto'); localStorage.setItem(key, today); return; }
+    if(localAutoPending) return;
+    localAutoPending = true;   // the browser needs one click to re-allow the folder; do it on the next tap
+    document.addEventListener('click', async ()=>{
+      localAutoPending = false;
+      try{ await localBackupWrite('auto'); localStorage.setItem(key, today); }catch(e){}
+    }, { once:true });
+  }catch(e){ console.warn('Local auto backup skipped', e); }
+}
+function localLastDate(){ try{ return localStorage.getItem('billzenLocalBk_' + currentUser.companyId) || ''; }catch(e){ return ''; } }
+
 /* ---- Company validity (set by super admin) ---- */
 function localISO(d){ d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 // whole days from today until the validity date (0 = last valid day, negative = expired); null = no expiry set
@@ -5390,6 +5742,11 @@ function renderValidityBanner(){
       msg = '\u26A0\uFE0F Your company validity ends ' + (d===0 ? '<u>today</u>' : 'in <u>' + d + ' day' + (d===1?'':'s') + '</u>') + ' (' + fmtDate(co.validUntil) + '). Please contact your administrator to renew, or you will not be able to sign in.';
     }
   }
+  if(currentUser && !currentUser.superAdmin && isAdmin() && (state.sales||[]).length > 0){
+    const last = localLastDate();
+    const age = last ? Math.round((new Date(localISO()+'T00:00:00') - new Date(last+'T00:00:00')) / 86400000) : null;
+    if(age === null || age > 7) msg += (msg ? '<br>' : '') + '\uD83D\uDCBE ' + (age === null ? 'No backup has been saved on this device yet.' : 'Your last backup on this device was ' + age + ' days ago.') + ' Open <u>Backup &amp; Restore</u> and save one.';
+  }
   el.innerHTML = msg; el.style.display = msg ? 'block' : 'none';
 }
 
@@ -5400,7 +5757,7 @@ function viewCompanies(){
   return `
   <div class="pagehead">
     <div><h1>Companies</h1><div class="desc">Each company is a separate workspace with its own users, stock, bills and ledgers.</div></div>
-    <button class="btn primary" data-pa="new-company">+ New Company</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn" data-pa="mail-setup">&#9993; Email backup setup</button><button class="btn" data-pa="backup-all">&#8681; Backup all companies</button><button class="btn primary" data-pa="new-company">+ New Company</button></div>
   </div>
   <div class="kpis">${kpi('Companies',list.length)}${kpi('Active',act,'good')}${kpi('Suspended',list.length-act,'bad')}${kpi('Super admins',platform.superAdmins.length,'info')}</div>
   <div class="card">
@@ -5600,6 +5957,8 @@ async function handleConsoleClick(e){
     else if(a==='admins') adminsModal(id);
     else if(a==='open') openCompanyAsSuper(id);
     else if(a==='validity') validityModal(id);
+    else if(a==='mail-setup') mailSetupModal();
+    else if(a==='backup-all'){ b.disabled = true; try{ await downloadAllCompaniesBackup(); } finally { b.disabled = false; } }
     else if(a==='toggle'){
       const c = platform.companies.find(x=>x.id===id); if(!c) return;
       const on = c.active!==false;
@@ -5679,6 +6038,8 @@ async function handleConsoleClick(e){
     if(typeof closeMobileSidebar==='function') closeMobileSidebar();
     resetLogoutTimer();
     render();
+    autoBackupIfNeeded();
+    autoLocalIfNeeded();
   }
 
   // One form for everyone: super admins land in the platform console, everyone else in their own company.
