@@ -2459,11 +2459,30 @@ function printWithA4Fit(){
   const el = document.getElementById('gst-invoice');
   if(el){
     const PW = 716, PH = 1030;                           // ~190mm x 277mm in CSS px, with a small safety margin
-    const w = el.offsetWidth || 820, h = el.offsetHeight || 1;
-    let pz = Math.min(1, PW / w);
-    if(billCfg(state.company).fitA4 !== false) pz = Math.min(pz, PH / h);
+    const filler = el.querySelector('td[data-bl="itemsHeight"]');
+    const origH = filler ? filler.style.height : '';
+    const w = el.offsetWidth || 820;
+    // 1) collapse the blank "item area" so we know the real content height
+    if(filler) filler.style.height = '0px';
+    const h0 = el.offsetHeight || 1;
+    const pz0 = Math.min(1, PW / w);
+    const pageH = PH / pz0;                              // page height in unscaled px
+    let pz = pz0;
+    if(h0 <= pageH){
+      // 2a) content fits on ONE page: stretch the blank area so totals/bank/sign sit at the page bottom
+      if(filler){
+        const base = filler.offsetHeight;
+        filler.style.height = Math.max(0, Math.floor(pageH - h0 - 4) + base) + 'px';
+      }
+    } else if(billCfg(state.company).fitA4 !== false){
+      // 2b) too tall: shrink whole bill to one page, no blank gap
+      pz = Math.min(pz0, PH / h0);
+    }
+    // 2c) otherwise: multiple pages, flows naturally with NO blank gap before the totals
     el.style.setProperty('--pz', pz.toFixed(4));
     el.style.setProperty('--pw', w + 'px');
+    const restore = ()=>{ if(filler) filler.style.height = origH; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
   }
   window.print();
 }
