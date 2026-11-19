@@ -1313,6 +1313,39 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
 #bill-fit-sheet #gst-invoice, #bv-sheet #gst-invoice, #bd-sheet #gst-invoice{ max-width:none !important; }
 @media screen{ #bill-fit-sheet{ transform-origin:0 0; transform:scale(var(--bs,1)); } }
 @media print{ #bill-fit-wrap{ height:auto !important; overflow:visible !important; } #bill-fit-sheet{ width:100% !important; transform:none !important; } }
+
+/* ---- Mobile Gateway: clean card layout (phones) ---- */
+@media screen and (max-width:760px){
+  body.home{ background:#f3f6fb; }
+  body.home .pagebar{ display:none; }                       /* title is already on the menu card */
+  body.home .wrap{ display:block; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; background:#f3f6fb; padding:12px 12px calc(24px + env(safe-area-inset-bottom,0px)); }
+
+  /* validity notice: slim rounded alert */
+  #val-banner{ margin:10px 12px 0; padding:10px 12px !important; border:1px solid #f3d38a !important; border-left:4px solid #f59e0b !important; border-radius:12px; font-size:12.5px !important; line-height:1.4; font-weight:600; }
+
+  /* company + period card */
+  body.home #companies{ display:block; width:100%; max-width:none; min-width:0; max-height:none !important; overflow:visible; flex:none;
+    background:#fff; border:1px solid #e4eaf4; border-radius:16px; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 8px 22px rgba(15,23,42,.06); margin:0 0 14px; }
+  body.home .period{ display:grid; grid-template-columns:1fr auto; column-gap:12px; align-items:start; height:auto !important; min-height:0; padding:14px 16px 12px; border-bottom:1px solid #edf0f6; }
+  body.home .period small{ font-size:10px; letter-spacing:.09em; color:#64748b; font-weight:600; margin:0 0 3px; }
+  body.home .period > strong{ grid-column:1; font-size:14px; color:#0f1b2d; }
+  body.home .period .current-date{ position:static !important; grid-column:2; grid-row:1 / span 2; text-align:right; margin:0; }
+  body.home .period .current-date strong{ display:block; font-size:13px; color:#0f1b2d; }
+  body.home .company-head{ display:none; }
+  body.home .company-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:13px 16px; border:0; }
+  body.home .company-row button{ font-size:15px; font-weight:700; color:#0f1b2d; text-align:left; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  body.home .company-row time{ font-size:12px; color:#64748b; white-space:nowrap; }
+  body.home .company-row time::before{ content:"Last entry: "; }
+
+  /* gateway menu card */
+  body.home #main{ display:block; overflow:visible; flex:none; min-height:0; padding:0 !important; background:transparent; }
+  body.home .gw{ width:100%; margin:0; border-radius:16px; }
+  body.home .gw-title{ padding:14px; font-size:15px; }
+  body.home .gw-sec{ padding:14px 16px 4px; font-size:11px; }
+  body.home .gw-item{ min-height:46px; margin:2px 8px; padding:10px 14px; font-size:15px; border-radius:10px; }
+  body.home .gw-item + .gw-item{ border-top:0; }
+  body.home .gw-pad{ height:6px; }
+}
 </style>
 </head>
 
