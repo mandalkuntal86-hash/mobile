@@ -1241,6 +1241,19 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
 }
 /* ================= END PROFESSIONAL THEME v2 ================= */
 
+/* bill layout settings */
+#gst-invoice .gi-title.sized{ display:flex; align-items:center; justify-content:center; box-sizing:border-box; }
+#gst-invoice [data-bl]{ box-sizing:border-box; }
+#gst-invoice tr[style*="height:"] > td, #gst-invoice tr[style*="height:"] > th, #gst-invoice td[style*="height:"]{ padding-top:1px !important; padding-bottom:1px !important; line-height:1.15; }
+#gst-invoice .gi-words[style*="height:"]{ padding-top:2px; padding-bottom:2px; line-height:1.15; }
+#gst-invoice .gi-bottom[style*="height:"] .qr-col, #gst-invoice .gi-bottom[style*="height:"] .bank-col{ padding-top:3px; padding-bottom:3px; }
+#gst-invoice .gi-bottom[style*="height:"] .gi-sign{ margin-top:2px; }
+#gst-invoice .gi-footer[style*="height:"], #gst-invoice .gi-footer2[style*="height:"]{ padding-top:0; padding-bottom:0; line-height:1.15; }
+.bl-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; margin:4px 0 14px; }
+.bl-chk{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; cursor:pointer; }
+.bl-chk input{ width:18px; height:18px; min-height:0; margin:0; }
+@media (max-width:520px){ .bl-grid{ grid-template-columns:1fr; } }
+
 /* ================= MOBILE OVERLAP FIX (keep after theme v2 so it wins) =================
    Cause: theme v2 re-applied fixed desktop values (topline height:58px, find height:36px,
    #main padding 28px 32px 56px) with higher specificity ("body .eb-header .topline"),
@@ -1287,6 +1300,7 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
   #invoice-paper table, #gst-invoice table{ width:100%; page-break-inside:auto; }
   #invoice-paper tr, #gst-invoice tr, #gst-invoice .gi-bottom{ page-break-inside:avoid; break-inside:avoid; }
   #invoice-paper thead, #gst-invoice thead{ display:table-header-group; }
+  #modal-root #gst-invoice{ width:var(--pw,100%) !important; max-width:none !important; margin:0 !important; zoom:var(--pz,1); }
   @page{ size:A4; margin:10mm; }
 }
 #bill-fit-sheet #gst-invoice, #bv-sheet #gst-invoice{ max-width:none !important; }
@@ -2424,8 +2438,154 @@ function readLogoFile(file){
     fr.readAsDataURL(file);
   });
 }
+/* Prints the bill at its designed width, scaled to the A4 printable area (190 x 277 mm).
+   With "Fit on A4" on, it is also shrunk so the whole bill is on a single page. */
+function printWithA4Fit(){
+  const el = document.getElementById('gst-invoice');
+  if(el){
+    const PW = 716, PH = 1030;                           // ~190mm x 277mm in CSS px, with a small safety margin
+    const w = el.offsetWidth || 820, h = el.offsetHeight || 1;
+    let pz = Math.min(1, PW / w);
+    if(billCfg(state.company).fitA4 !== false) pz = Math.min(pz, PH / h);
+    el.style.setProperty('--pz', pz.toFixed(4));
+    el.style.setProperty('--pw', w + 'px');
+  }
+  window.print();
+}
+function readBillCfgForm(){
+  const out = {};
+  Object.keys(BILL_DEFAULTS).forEach(k=>{
+    const el = document.getElementById('bl-'+k);
+    if(!el) { out[k] = JSON.parse(JSON.stringify(billCfg(state.company)[k])); return; }
+    out[k] = (typeof BILL_DEFAULTS[k]==='boolean') ? !!el.checked : (typeof BILL_DEFAULTS[k]==='number') ? (Number(el.value)||0) : el.value.trim();
+  });
+  return out;
+}
+/* Visual bill designer: live preview with drag bars to resize the boxes, then Save. */
+function openBillDesigner(){
+  if(!isAdmin()) return;
+  const draft = readBillCfgForm();
+  const cc = Object.assign({}, state.company, { bill: draft });
+  if(companyLogoDraft !== null) cc.logo = companyLogoDraft;
+  if(!(cc.gst && cc.gst.trim())){ alert('Enter the GSTIN first - box sizes apply to the GST Tax Invoice layout.'); return; }
+  const real = (state.sales||[]).length ? state.sales[state.sales.length-1] : null;
+  const sale = (real && real.items) ? real : { id:'sample', invoiceNo:'SAMPLE-001', date:todayISO(), customer:'Sample Customer', customerPhone:'9999999999', customerAddress:'Sample address',
+    items:[{ productId:'', name:'Sample Item', qty:1, price:11800 }], subtotal:11800, discount:0, total:11800, paid:11800, paymentMode:'UPI' };
+  const LABELS = { titleHeight:'Title', headerHeight:'Seller / invoice row', buyerHeight:'Buyer box', tableHeadHeight:'Column headings', itemRowHeight:'Item row', itemsHeight:'Item area',
+    subtotalHeight:'Taxable total row', cgstHeight:'CGST row', sgstHeight:'SGST row', discountHeight:'Discount row', roundHeight:'Round-off row', totalHeight:'Total row',
+    wordsHeight:'Amount in words', hsnHeadHeight:'Tax table heading', hsnRowHeight:'Tax table row', taxWordsHeight:'Tax in words', bottomHeight:'Bottom box', jurisHeight:'Jurisdiction line', footerHeight:'Footer line' };
+  const FW = 820;
+  document.getElementById('modal-root').innerHTML = `<div class="modal-bg"><div class="modal wide" style="max-width:880px;">
+    <div class="modal-head"><h2>Adjust bill layout</h2><button class="modal-close" id="bd-x" type="button">&times;</button></div>
+    <div class="desc" style="margin-bottom:4px;">Drag a blue bar up/down to resize a line, or the green &#10021; handle on a paragraph to move it. The red dashed line is the end of an A4 page. Then press <b>Save layout</b>.${real?'':' (Sample bill shown)'}</div>
+    <div id="bd-a4" style="font-size:13px;font-weight:600;margin-bottom:8px;"></div>
+    <div id="bd-wrap" style="overflow:hidden;position:relative;background:#fff;"><div id="bd-sheet" style="width:${FW}px;position:relative;transform-origin:0 0;">${gstInvoiceHtml(sale, cc)}</div></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px;">
+      <button class="btn ghost" type="button" id="bd-reset">Reset sizes &amp; positions</button>
+      <button class="btn" type="button" id="bd-cancel">Cancel</button>
+      <button class="btn primary" type="button" id="bd-save">Save layout</button>
+    </div></div></div>`;
+  const root = document.getElementById('modal-root');
+  const wrap = root.querySelector('#bd-wrap'), sheet = root.querySelector('#bd-sheet');
+  const els = {}; sheet.querySelectorAll('[data-bl]').forEach(el=>{ if(!els[el.dataset.bl]) els[el.dataset.bl] = el; });
+  const a4line = document.createElement('div');
+  a4line.style.cssText = 'position:absolute;left:-10px;width:calc(100% + 20px);border-top:2px dashed #d92d20;z-index:4;pointer-events:none;';
+  a4line.innerHTML = '<span style="position:absolute;left:4px;top:2px;background:#d92d20;color:#fff;font:600 10px sans-serif;padding:1px 6px;border-radius:8px;">A4 page end</span>';
+  sheet.appendChild(a4line);
+  const inv = sheet.querySelector('#gst-invoice');
+  if(!draft.moves || typeof draft.moves !== 'object') draft.moves = {};
+  const MLABELS = { sellerBlock:'Company name & address', buyerBlock:'Buyer details', amtWordsBlock:'Amount in words', taxWordsBlock:'Tax in words',
+    panBlock:'PAN', declBlock:'Declaration', termsBlock:'Terms & conditions', bankBlock:'Bank details', signBlock:'Signature / seal' };
+  const mels = {}; sheet.querySelectorAll('[data-mv]').forEach(el=>{ mels[el.dataset.mv] = el; });
+  const mhandles = {};
+  let sc = 1;
+  const apply = (key, v)=>{
+    const el = els[key]; if(!el) return;
+    sheet.querySelectorAll('[data-bl="'+key+'"]').forEach(t=>{
+      if(/^(TR|TD|TH)$/.test(t.tagName)) t.style.height = v ? v+'px' : '';
+      else { t.style.minHeight = ''; t.style.height = v ? v+'px' : ''; t.style.overflow = v ? 'hidden' : ''; }
+      if(key==='buyerHeight') t.style.verticalAlign = 'top';
+      if(key==='titleHeight') t.classList.toggle('sized', !!v);
+    });
+  };
+  const handles = {};
+  const place = ()=>{
+    sc = Math.min(1, wrap.clientWidth / FW) || 1;
+    sheet.style.transform = 'scale(' + sc + ')';
+    const sr = sheet.getBoundingClientRect();
+    Object.keys(els).forEach(k=>{
+      const h = handles[k]; if(!h) return;
+      const r = els[k].getBoundingClientRect();
+      h.style.top = ((r.bottom - sr.top) / sc) + 'px';
+      h.lastChild.textContent = LABELS[k] + ': ' + (draft[k] ? draft[k] + ' px' : 'auto') + '  ↕';
+    });
+    Object.keys(mels).forEach(k=>{
+      const h = mhandles[k], r = mels[k].getBoundingClientRect(); if(!h) return;
+      h.style.left = ((r.left - sr.left) / sc - 4) + 'px';
+      h.style.top = ((r.top - sr.top) / sc - 4) + 'px';
+    });
+    wrap.style.height = Math.ceil(sheet.offsetHeight * sc) + 'px';
+    const lim = inv.offsetWidth * (1030 / 716), H = inv.offsetHeight;
+    a4line.style.top = lim + 'px';
+    const st = root.querySelector('#bd-a4');
+    if(H <= lim){ st.style.color = '#166534'; st.textContent = '\u2713 Fits on one A4 page (' + Math.round(H/lim*100) + '% of the page height)'; }
+    else { st.style.color = '#b42318'; st.textContent = 'Taller than A4 by ' + Math.round((H/lim-1)*100) + '%. ' + (draft.fitA4 ? 'It will be shrunk to ' + Math.round(lim/H*100) + '% to fit one page when printing.' : 'Turn on "Fit whole bill on one A4 page" to auto-shrink, or reduce the heights.'); }
+  };
+  Object.keys(els).forEach(k=>{
+    const h = document.createElement('div');
+    h.style.cssText = 'position:absolute;left:0;width:100%;height:18px;margin-top:-9px;cursor:ns-resize;touch-action:none;z-index:5;background:linear-gradient(transparent 7px,#2457d6 7px,#2457d6 10px,transparent 10px);';
+    h.innerHTML = '<span style="position:absolute;right:6px;top:-3px;background:#2457d6;color:#fff;font:600 11px sans-serif;padding:2px 8px;border-radius:10px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .1s;"></span>';
+    h.addEventListener('pointerenter', ()=>{ h.style.zIndex = 9; h.lastChild.style.opacity = 1; });
+    h.addEventListener('pointerleave', ()=>{ if(!h.hasPointerCapture || !h._drag){ h.style.zIndex = 5; h.lastChild.style.opacity = 0; } });
+    sheet.appendChild(h); handles[k] = h;
+    h.addEventListener('pointerdown', e=>{
+      e.preventDefault(); h.setPointerCapture(e.pointerId); h._drag = true;
+      const y0 = e.clientY;
+      const v0 = draft[k] || Math.round(els[k].getBoundingClientRect().height / sc);
+      const mv = ev=>{ const v = Math.max(4, Math.min(600, Math.round(v0 + (ev.clientY - y0) / sc))); draft[k] = v; apply(k, v); place(); };
+      const up = ()=>{ h._drag = false; h.lastChild.style.opacity = 0; h.style.zIndex = 5; h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); };
+      h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+    });
+  });
+  Object.keys(mels).forEach(k=>{
+    const h = document.createElement('div');
+    h.title = 'Drag to move: ' + MLABELS[k];
+    h.style.cssText = 'position:absolute;width:20px;height:20px;border-radius:6px;background:#0e9f6e;color:#fff;font:700 13px/20px sans-serif;text-align:center;cursor:move;touch-action:none;z-index:8;box-shadow:0 1px 3px rgba(0,0,0,.35);';
+    h.textContent = '\u2725';
+    sheet.appendChild(h); mhandles[k] = h;
+    const el = mels[k];
+    h.addEventListener('pointerenter', ()=>{ el.style.outline = '1px dashed #0e9f6e'; });
+    h.addEventListener('pointerleave', ()=>{ if(!h._drag) el.style.outline = ''; });
+    h.addEventListener('pointerdown', e=>{
+      e.preventDefault(); h.setPointerCapture(e.pointerId); h._drag = true;
+      const x0 = e.clientX, y0 = e.clientY, m0 = (draft.moves[k] || [0,0]).slice();
+      const mv = ev=>{
+        const x = Math.max(-800, Math.min(800, Math.round(m0[0] + (ev.clientX - x0) / sc)));
+        const y = Math.max(-800, Math.min(800, Math.round(m0[1] + (ev.clientY - y0) / sc)));
+        draft.moves[k] = [x, y]; el.style.transform = 'translate(' + x + 'px,' + y + 'px)'; place();
+      };
+      const up = ()=>{ h._drag = false; el.style.outline = ''; h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); };
+      h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+    });
+  });
+  place(); setTimeout(place, 200);
+  const close = ()=>{ window.removeEventListener('resize', place); closeModal(); };
+  window.addEventListener('resize', place);
+  root.querySelector('#bd-x').addEventListener('click', close);
+  root.querySelector('#bd-cancel').addEventListener('click', close);
+  root.querySelector('#bd-reset').addEventListener('click', ()=>{
+    Object.keys(LABELS).forEach(k=>{ draft[k] = BILL_DEFAULTS[k]; apply(k, BILL_DEFAULTS[k]); });
+    draft.moves = {}; Object.keys(mels).forEach(k=>{ mels[k].style.transform = ''; }); place();
+  });
+  root.querySelector('#bd-save').addEventListener('click', ()=>{
+    if(!isAdmin()) return;
+    state.company = Object.assign({}, state.company, { bill: Object.assign({}, draft) });
+    saveState(); close(); render();
+  });
+}
 function viewCompany(){
   const c = state.company;
+  const b = billCfg(c);
   const shownLogo = companyLogoDraft !== null ? companyLogoDraft : (c.logo||'');
   return `
     <div class="pagehead"><div><h1>Company Setup</h1><div class="desc">This appears on every printed bill</div></div></div>
@@ -2463,7 +2623,41 @@ function viewCompany(){
         <div class="field"><label>Account Number</label><input type="text" id="c-bankaccno" value="${esc(c.bankAccNo)}"></div>
         <div class="field"><label>Branch & IFSC Code</label><input type="text" id="c-bankifsc" value="${esc(c.bankIFSC)}"></div>
       </div>
-      <button class="btn primary" data-action="save-company">Save Company Details</button>
+      <h3 style="margin-top:18px;">Bill Layout (this company only)</h3>
+      <div class="desc" style="margin-bottom:10px;">Choose what prints on this company's bills. Other companies keep their own layout.</div>
+      <div class="field"><label>Bill heading (GST bill)</label><input type="text" id="bl-title" value="${esc(b.title)}" placeholder="TAX INVOICE"></div>
+      <div class="desc" style="margin-bottom:6px;">Box sizes (in px, GST bill). Use 0 for automatic height.</div>
+      <div class="grid cols-3">
+        <div class="field"><label>Item area height</label><input type="number" min="0" max="600" id="bl-itemsHeight" value="${b.itemsHeight}"></div>
+        <div class="field"><label>Buyer box height</label><input type="number" min="0" max="600" id="bl-buyerHeight" value="${b.buyerHeight}"></div>
+        <div class="field"><label>Bottom box height</label><input type="number" min="0" max="600" id="bl-bottomHeight" value="${b.bottomHeight}"></div>
+      </div>
+      <div class="bl-grid">
+        <label class="bl-chk"><input type="checkbox" id="bl-fitA4" ${b.fitA4?'checked':''}> Fit whole bill on one A4 page when printing</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showLogo" ${b.showLogo?'checked':''}> Company logo</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showPaymentMode" ${b.showPaymentMode?'checked':''}> Payment mode</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showHsnColumn" ${b.showHsnColumn?'checked':''}> HSN/SAC column</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showDiscColumn" ${b.showDiscColumn?'checked':''}> Discount % column</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showImei" ${b.showImei?'checked':''}> IMEI / Serial numbers</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showAmountWords" ${b.showAmountWords?'checked':''}> Amount in words</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showHsnSummary" ${b.showHsnSummary?'checked':''}> HSN-wise tax summary</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showTaxWords" ${b.showTaxWords?'checked':''}> Tax amount in words</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showPan" ${b.showPan?'checked':''}> Company PAN</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showDeclaration" ${b.showDeclaration?'checked':''}> Declaration</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showBank" ${b.showBank?'checked':''}> Bank details</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showSignature" ${b.showSignature?'checked':''}> Signature / seal</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-showJurisdiction" ${b.showJurisdiction?'checked':''}> Jurisdiction note</label>
+      </div>
+      <div class="field"><label>Declaration text</label><textarea id="bl-declarationText" rows="2">${esc(b.declarationText)}</textarea></div>
+      <div class="field"><label>Terms &amp; Conditions (optional, printed on the bill)</label><textarea id="bl-terms" rows="3" placeholder="e.g. Goods once sold will not be taken back.">${esc(b.terms)}</textarea></div>
+      <div class="field"><label>Footer line (GST bill)</label><input type="text" id="bl-footerNote" value="${esc(b.footerNote)}"></div>
+      <div class="field"><label>Footer line (plain bill) — {company} is replaced by the name</label><input type="text" id="bl-plainFooter" value="${esc(b.plainFooter)}"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn primary" data-action="save-company">Save Company Details</button>
+        <button class="btn" type="button" data-action="design-bill-layout">&#9998; Adjust by dragging</button>
+        <button class="btn" type="button" data-action="preview-bill-layout">Preview bill</button>
+        <button class="btn ghost" type="button" data-action="reset-bill-layout">Reset layout to default</button>
+      </div>
     </div>
   `;
 }
@@ -3658,13 +3852,39 @@ function doSaveEditedPurchase(){
 /* =========================================================
    PRINT INVOICE
    ========================================================= */
+/* Per-company bill layout. Stored in state.company.bill (saved with the company, so every
+   company has its own layout). Missing keys fall back to these defaults. */
+const BILL_DEFAULTS = {
+  fitA4:true, moves:{},
+  itemsHeight:120, buyerHeight:0, bottomHeight:0,
+  titleHeight:0, headerHeight:0, tableHeadHeight:0, itemRowHeight:0, subtotalHeight:0, cgstHeight:0, sgstHeight:0,
+  discountHeight:0, roundHeight:0, totalHeight:0, wordsHeight:0, hsnHeadHeight:0, hsnRowHeight:0, taxWordsHeight:0,
+  jurisHeight:0, footerHeight:0,
+  title:'TAX INVOICE', showLogo:true, showPaymentMode:false,
+  showHsnColumn:true, showDiscColumn:true, showImei:true,
+  showAmountWords:true, showHsnSummary:true, showTaxWords:true,
+  showPan:true, showDeclaration:true,
+  declarationText:'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
+  terms:'', showBank:true, showSignature:true, showJurisdiction:true,
+  footerNote:'This is a Computer Generated Invoice',
+  plainFooter:'Thank you for shopping with {company}. Please retain this bill for warranty/service claims.'
+};
+const BILL_HEIGHT_KEYS = Object.keys(BILL_DEFAULTS).filter(k=>/Height$/.test(k));
+function billCfg(c){
+  const o = Object.assign({}, BILL_DEFAULTS, (c && c.bill) || {});
+  o.moves = (o.moves && typeof o.moves==='object') ? o.moves : {};
+  BILL_HEIGHT_KEYS.forEach(k=>{ const n = Number(o[k]); o[k] = isFinite(n) && n>=0 ? Math.min(n,600) : BILL_DEFAULTS[k]; });
+  return o;
+}
+
 function plainInvoiceHtml(s, c){
   const due = s.total - s.paid;
+  const bc = billCfg(c);
   return `
   <div id="invoice-paper">
     <div class="inv-head">
       <div style="display:flex;gap:12px;align-items:flex-start;">
-        ${logoImgHtml(c)}<div>
+        ${bc.showLogo?logoImgHtml(c):''}<div>
         <div class="shopname">${esc(c.name||'My Mobile Shop')}</div>
         <div class="shopmeta">${esc(c.address||'')}${c.address?'<br>':''}${c.phone?('Ph: '+esc(c.phone)+' '):''}${c.email?esc(c.email):''}${c.gst?('<br>GSTIN: '+esc(c.gst)):''}</div>
         </div>
@@ -3680,7 +3900,7 @@ function plainInvoiceHtml(s, c){
     <table>
       <thead><tr><th>Item</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Amount</th></tr></thead>
       <tbody>
-        ${s.items.map(it=>`<tr><td>${esc(it.name)}${(it.imeiUnitIds&&it.imeiUnitIds.length)?`<div style="font-size:10.5px;color:#666;font-style:italic;">IMEI/SL No.: ${it.imeiUnitIds.map(id=>{const u=(state.imeiUnits||[]).find(x=>x.id===id); return u?esc(u.imei):'';}).filter(Boolean).join(', ')}</div>`:''}</td><td style="text-align:right;">${it.qty}</td><td style="text-align:right;">${money(it.price)}</td><td style="text-align:right;">${money(it.qty*it.price)}</td></tr>`).join('')}
+        ${s.items.map(it=>`<tr><td>${esc(it.name)}${(bc.showImei&&it.imeiUnitIds&&it.imeiUnitIds.length)?`<div style="font-size:10.5px;color:#666;font-style:italic;">IMEI/SL No.: ${it.imeiUnitIds.map(id=>{const u=(state.imeiUnits||[]).find(x=>x.id===id); return u?esc(u.imei):'';}).filter(Boolean).join(', ')}</div>`:''}</td><td style="text-align:right;">${it.qty}</td><td style="text-align:right;">${money(it.price)}</td><td style="text-align:right;">${money(it.qty*it.price)}</td></tr>`).join('')}
       </tbody>
     </table>
     <div class="totals">
@@ -3688,8 +3908,10 @@ function plainInvoiceHtml(s, c){
       <div class="r"><span>Discount</span><span>- ${money(s.discount)}</span></div>
       <div class="r grand"><span>Total</span><span>${money(s.total)}</span></div>
     </div>
-    ${sigBlockHtml(s) ? `<div style="text-align:right;margin-top:14px;font-size:11.5px;">for ${esc(c.name||'')}${sigBlockHtml(s)}Authorised Signatory</div>` : ''}
-    <div class="footnote">Thank you for shopping with ${esc(c.name||'us')}. Please retain this bill for warranty/service claims.</div>
+    ${bc.showPaymentMode ? `<div style="font-size:12px;margin-top:8px;"><strong>Payment Mode:</strong> ${esc(s.paymentMode||'-')}</div>` : ''}
+    ${bc.showSignature && sigBlockHtml(s) ? `<div style="text-align:right;margin-top:14px;font-size:11.5px;">for ${esc(c.name||'')}${sigBlockHtml(s)}Authorised Signatory</div>` : ''}
+    ${bc.terms ? `<div style="font-size:11px;margin-top:10px;white-space:pre-line;"><strong>Terms &amp; Conditions</strong><br>${esc(bc.terms)}</div>` : ''}
+    ${bc.plainFooter ? `<div class="footnote">${esc(bc.plainFooter.replace(/\{company\}/g, c.name||'us'))}</div>` : ''}
   </div>`;
 }
 
@@ -3698,6 +3920,12 @@ function plainInvoiceHtml(s, c){
    followed by CGST+SGST, round-off, discount, grand total, amount in words,
    an HSN-wise tax summary, bank details and a signature block. */
 function gstInvoiceHtml(s, c){
+  const bc = billCfg(c);
+  const hr = k => bc[k] ? ` style="height:${bc[k]}px;"` : '';              // table rows
+  const mvT = k => { const m = bc.moves && bc.moves[k]; return m ? `transform:translate(${Number(m[0])||0}px,${Number(m[1])||0}px);` : ''; };
+  const mv = k => ` data-mv="${k}"` + (mvT(k) ? ` style="${mvT(k)}"` : '');   // movable paragraph
+  const hd = k => bc[k] ? ` style="height:${bc[k]}px;overflow:hidden;"` : '';          // blocks
+  const NC = 6 + (bc.showHsnColumn?1:0) + (bc.showDiscColumn?1:0);
   const taxRate = Number(c.gstRate)||18;
   const halfRate = taxRate/2;
   let taxableSum = 0;
@@ -3713,16 +3941,16 @@ function gstInvoiceHtml(s, c){
     const desc = [esc(it.name)];
     if(it.imeiUnitIds && it.imeiUnitIds.length){
       const imeis = it.imeiUnitIds.map(id=>{const u=(state.imeiUnits||[]).find(x=>x.id===id); return u?u.imei:'';}).filter(Boolean);
-      if(imeis.length) desc.push(`<span class="desc-code">IMEI/SL No.: ${esc(imeis.join(', '))}</span>`);
-    } else if(prod && prod.imei) desc.push(`<span class="desc-code">${esc(prod.imei)}</span>`);
-    return { hsn, row: `<tr>
+      if(bc.showImei && imeis.length) desc.push(`<span class="desc-code">IMEI/SL No.: ${esc(imeis.join(', '))}</span>`);
+    } else if(bc.showImei && prod && prod.imei) desc.push(`<span class="desc-code">${esc(prod.imei)}</span>`);
+    return { hsn, row: `<tr class="gi-item" data-bl="itemRowHeight"${hr('itemRowHeight')}>
         <td class="center">${i+1}</td>
         <td>${desc.join('')}</td>
-        <td class="center">${esc(hsn)}</td>
+        ${bc.showHsnColumn?`<td class="center">${esc(hsn)}</td>`:''}
         <td class="num">${it.qty} PCS</td>
         <td class="num">${money(unitIncl)}</td>
         <td class="num">${money(unitTaxable)}</td>
-        <td class="center">-</td>
+        ${bc.showDiscColumn?'<td class="center">-</td>':''}
         <td class="num">${money(lineTaxable)}</td>
       </tr>`, taxable: lineTaxable };
   });
@@ -3745,7 +3973,7 @@ function gstInvoiceHtml(s, c){
   const hsnRows = Object.keys(hsnMap).map(hsn=>{
     const val = hsnMap[hsn];
     const c1 = val*halfRate/100, c2 = val*halfRate/100;
-    return `<tr><td>${esc(hsn)}</td><td class="num">${money(val)}</td><td class="center">${halfRate}%</td><td class="num">${money(c1)}</td><td class="center">${halfRate}%</td><td class="num">${money(c2)}</td><td class="num">${money(c1+c2)}</td></tr>`;
+    return `<tr data-bl="hsnRowHeight"${hr('hsnRowHeight')}><td>${esc(hsn)}</td><td class="num">${money(val)}</td><td class="center">${halfRate}%</td><td class="num">${money(c1)}</td><td class="center">${halfRate}%</td><td class="num">${money(c2)}</td><td class="num">${money(c1+c2)}</td></tr>`;
   }).join('');
 
   const buyerLines = [esc(s.customer||'Walk-in Customer')];
@@ -3755,12 +3983,12 @@ function gstInvoiceHtml(s, c){
 
   return `
   <div id="gst-invoice">
-    <div class="gi-title">TAX INVOICE</div>
+    <div class="gi-title${bc.titleHeight?' sized':''}" data-bl="titleHeight"${hd('titleHeight')}>${esc(bc.title||'TAX INVOICE')}</div>
     <table class="gi-tbl">
-      <tr>
+      <tr data-bl="headerHeight"${hr('headerHeight')}>
         <td style="width:56%;">
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-          ${logoImgHtml(c)}<div>
+          <div data-mv="sellerBlock" style="display:flex;gap:12px;align-items:flex-start;${mvT('sellerBlock')}">
+          ${bc.showLogo?logoImgHtml(c):''}<div>
           <div class="gi-shopname">${esc(c.name||'My Shop')}</div>
           <div class="gi-shopmeta">
             ${esc(c.address||'')}${c.address?'<br>':''}
@@ -3782,76 +4010,78 @@ function gstInvoiceHtml(s, c){
         </td>
       </tr>
       <tr>
-        <td>
-          <div class="gi-label">Buyer (Bill to)</div>
-          <div class="gi-strong">${buyerLines.join('<br>')}</div>
+        <td data-bl="buyerHeight"${bc.showPaymentMode?'':' colspan="3"'}${bc.buyerHeight?` style="height:${bc.buyerHeight}px;vertical-align:top;"`:''}>
+          <div${mv('buyerBlock')}><div class="gi-label">Buyer (Bill to)</div>
+          <div class="gi-strong">${buyerLines.join('<br>')}</div></div>
         </td>
-        <td colspan="2"><span class="gi-label">Payment Mode</span><br>${esc(s.paymentMode||'-')}</td>
+        ${bc.showPaymentMode?`<td colspan="2" style="vertical-align:top;"><span class="gi-label">Payment Mode</span><br>${esc(s.paymentMode||'-')}</td>`:''}
       </tr>
     </table>
 
     <table class="gi-tbl items-tbl">
       <thead>
-        <tr>
+        <tr data-bl="tableHeadHeight"${hr('tableHeadHeight')}>
           <th style="width:5%;">Sl<br>No.</th>
           <th>Description of Goods</th>
-          <th style="width:9%;">HSN/SAC</th>
+          ${bc.showHsnColumn?'<th style="width:9%;">HSN/SAC</th>':''}
           <th style="width:8%;">Quantity</th>
           <th style="width:11%;">Rate<br>(Incl. of Tax)</th>
           <th style="width:11%;">Rate per Unit</th>
-          <th style="width:6%;">Disc.<br>%</th>
+          ${bc.showDiscColumn?'<th style="width:6%;">Disc.<br>%</th>':''}
           <th style="width:12%;">Amount</th>
         </tr>
       </thead>
       <tbody>
         ${rows.map(r=>r.row).join('')}
-        <tr><td colspan="8" style="height:120px; border-left:1px solid #000; border-right:1px solid #000;">&nbsp;</td></tr>
-        <tr><td colspan="7" style="text-align:right;">&nbsp;</td><td class="num">${money(taxableSum)}</td></tr>
-        <tr><td colspan="7" style="text-align:center; font-style:italic;">CGST</td><td class="num">${money(cgst)}</td></tr>
-        <tr><td colspan="7" style="text-align:center; font-style:italic;">SGST</td><td class="num">${money(sgst)}</td></tr>
-        ${discount>0?`<tr><td colspan="7" style="text-align:center; font-style:italic;">Less: Discount</td><td class="num">(-) ${money(discount)}</td></tr>`:''}
-        ${Math.abs(roundOff)>=0.005?`<tr><td colspan="7" style="text-align:center; font-style:italic;">Round Off</td><td class="num">${roundOff<0?'(-) ':''}${money(Math.abs(roundOff))}</td></tr>`:''}
-        <tr style="font-weight:700;">
+        <tr><td colspan="${NC}" data-bl="itemsHeight" style="height:${bc.itemsHeight}px; border-left:1px solid #000; border-right:1px solid #000;">&nbsp;</td></tr>
+        <tr data-bl="subtotalHeight"${hr('subtotalHeight')}><td colspan="${NC-1}" style="text-align:right;">&nbsp;</td><td class="num">${money(taxableSum)}</td></tr>
+        <tr data-bl="cgstHeight"${hr('cgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">CGST</td><td class="num">${money(cgst)}</td></tr>
+        <tr data-bl="sgstHeight"${hr('sgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">SGST</td><td class="num">${money(sgst)}</td></tr>
+        ${discount>0?`<tr data-bl="discountHeight"${hr('discountHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">Less: Discount</td><td class="num">(-) ${money(discount)}</td></tr>`:''}
+        ${Math.abs(roundOff)>=0.005?`<tr data-bl="roundHeight"${hr('roundHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">Round Off</td><td class="num">${roundOff<0?'(-) ':''}${money(Math.abs(roundOff))}</td></tr>`:''}
+        <tr data-bl="totalHeight" style="font-weight:700;${bc.totalHeight?`height:${bc.totalHeight}px;`:''}">
           <td style="border-top:1px solid #000;"></td>
           <td style="border-top:1px solid #000;">Total</td>
-          <td style="border-top:1px solid #000;"></td>
+          ${bc.showHsnColumn?'<td style="border-top:1px solid #000;"></td>':''}
           <td class="num" style="border-top:1px solid #000;">${totalQty} PCS</td>
           <td style="border-top:1px solid #000;"></td>
           <td style="border-top:1px solid #000;"></td>
-          <td style="border-top:1px solid #000;"></td>
+          ${bc.showDiscColumn?'<td style="border-top:1px solid #000;"></td>':''}
           <td class="num" style="border-top:1px solid #000;">Rs ${money(s.total)}</td>
         </tr>
       </tbody>
     </table>
 
-    <div class="gi-words">
-      <div class="lbl">Amount Chargeable (in words)</div>
-      <div class="gi-strong">${amountInWords(s.total)}</div>
-    </div>
+    ${bc.showAmountWords?`<div class="gi-words" data-bl="wordsHeight"${hd('wordsHeight')}>
+      <div${mv('amtWordsBlock')}><div class="lbl">Amount Chargeable (in words)</div>
+      <div class="gi-strong">${amountInWords(s.total)}</div></div>
+    </div>`:''}
 
-    ${hsnRows ? `
+    ${(bc.showHsnSummary && hsnRows) ? `
     <table class="gi-tbl" style="margin-top:-1px;">
-      <thead><tr>
+      <thead><tr data-bl="hsnHeadHeight"${hr('hsnHeadHeight')}>
         <th>HSN/SAC</th><th>Taxable Value</th><th>CGST Rate</th><th>CGST Amt</th><th>SGST Rate</th><th>SGST Amt</th><th>Total Tax</th>
       </tr></thead>
       <tbody>${hsnRows}</tbody>
     </table>` : ''}
 
-    <div class="gi-words" style="border-top:none;">
-      <div class="lbl">Tax Amount (in words)</div>
-      <div class="gi-strong">${amountInWords(totalTax)}</div>
-    </div>
+    ${bc.showTaxWords?`<div class="gi-words" data-bl="taxWordsHeight" style="border-top:none;${bc.taxWordsHeight?`height:${bc.taxWordsHeight}px;overflow:hidden;`:''}">
+      <div${mv('taxWordsBlock')}><div class="lbl">Tax Amount (in words)</div>
+      <div class="gi-strong">${amountInWords(totalTax)}</div></div>
+    </div>`:''}
 
-    <div class="gi-bottom">
-      <div class="qr-col">
-        <div class="gi-label">Company's PAN</div>
-        <div class="gi-strong">${esc(c.pan||'-')}</div>
-        <div class="gi-label" style="margin-top:10px;">Declaration</div>
-        <div style="font-size:10px;">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
-      </div>
+    ${(bc.showPan || (bc.showDeclaration && bc.declarationText) || bc.terms || bc.showBank || bc.showSignature) ? `<div class="gi-bottom" data-bl="bottomHeight"${bc.bottomHeight?` style="height:${bc.bottomHeight}px;overflow:hidden;"`:''}>
+      ${(bc.showPan || (bc.showDeclaration && bc.declarationText) || bc.terms) ? `<div class="qr-col">
+        ${bc.showPan?`<div${mv('panBlock')}><div class="gi-label">Company's PAN</div>
+        <div class="gi-strong">${esc(c.pan||'-')}</div></div>`:''}
+        ${(bc.showDeclaration && bc.declarationText)?`<div${mv('declBlock')}><div class="gi-label" style="margin-top:${bc.showPan?10:0}px;">Declaration</div>
+        <div style="font-size:10px;white-space:pre-line;">${esc(bc.declarationText)}</div></div>`:''}
+        ${bc.terms?`<div${mv('termsBlock')}><div class="gi-label" style="margin-top:10px;">Terms &amp; Conditions</div>
+        <div style="font-size:10px;white-space:pre-line;">${esc(bc.terms)}</div></div>`:''}
+      </div>` : ''}
       <div class="bank-col">
-        <div class="bank-details">
-          ${(c.bankAccName||c.bankName||c.bankAccNo)?`
+        <div class="bank-details"${mv('bankBlock')}>
+          ${(bc.showBank && (c.bankAccName||c.bankName||c.bankAccNo))?`
           <strong>Company's Bank Details</strong><br>
           ${c.bankAccName?("A/c Holder's Name: "+esc(c.bankAccName)+"<br>"):''}
           ${c.bankName?("Bank Name: "+esc(c.bankName)+"<br>"):''}
@@ -3859,13 +4089,13 @@ function gstInvoiceHtml(s, c){
           ${c.bankIFSC?("Branch &amp; IFS Code: "+esc(c.bankIFSC)):''}
           `:''}
         </div>
-        <div class="gi-sign">
+        ${bc.showSignature?`<div class="gi-sign"${mv('signBlock')}>
           for ${esc(c.name||'')}<br>${sigBlockHtml(s) || '<br><br>'}Authorised Signatory
-        </div>
+        </div>`:''}
       </div>
-    </div>
-    ${c.jurisdiction? `<div class="gi-footer">${esc(c.jurisdiction)}</div>` : ''}
-    <div class="gi-footer2">This is a Computer Generated Invoice</div>
+    </div>` : ''}
+    ${(bc.showJurisdiction && c.jurisdiction)? `<div class="gi-footer" data-bl="jurisHeight"${hd('jurisHeight')}>${esc(c.jurisdiction)}</div>` : ''}
+    ${bc.footerNote?`<div class="gi-footer2" data-bl="footerHeight"${hd('footerHeight')}>${esc(bc.footerNote)}</div>`:''}
   </div>`;
 }
 
@@ -4154,8 +4384,31 @@ function attachHandlers(){
       bankAccNo: document.getElementById('c-bankaccno').value.trim(),
       bankIFSC: document.getElementById('c-bankifsc').value.trim(),
       logo: companyLogoDraft !== null ? companyLogoDraft : (state.company.logo||''),
+      bill: readBillCfgForm(),
     };
     companyLogoDraft = null;
+    saveState(); render();
+  });
+
+  const previewBillBtn = main.querySelector('[data-action="preview-bill-layout"]');
+  if(previewBillBtn) previewBillBtn.addEventListener('click', ()=>{
+    const cc = Object.assign({}, state.company, { bill: readBillCfgForm() });
+    if(companyLogoDraft !== null) cc.logo = companyLogoDraft;
+    const sample = { id:'sample', invoiceNo:'SAMPLE-001', date:todayISO(), customer:'Sample Customer', customerPhone:'9999999999', customerAddress:'Sample address',
+      items:[{ productId:'', name:'Sample Item', qty:1, price:11800 }], subtotal:11800, discount:0, total:11800, paid:11800, paymentMode:'UPI' };
+    const useGst = !!(cc.gst && cc.gst.trim());
+    const html = useGst ? gstInvoiceHtml(sample, cc) : plainInvoiceHtml(sample, cc);
+    openModal(`<div class="modal-bg" data-close="modal"><div class="modal wide" data-stop style="max-width:${useGst?'820px':'620px'};">
+      <div class="modal-head"><h2>Bill layout preview (not saved yet)</h2><button class="modal-close" data-close="modal">&times;</button></div>
+      <div style="overflow:auto;">${html}</div></div></div>`);
+  });
+  const designBillBtn = main.querySelector('[data-action="design-bill-layout"]');
+  if(designBillBtn) designBillBtn.addEventListener('click', openBillDesigner);
+  const resetBillBtn = main.querySelector('[data-action="reset-bill-layout"]');
+  if(resetBillBtn) resetBillBtn.addEventListener('click', ()=>{
+    if(!isAdmin()) return;
+    if(!confirm('Reset this company\'s bill layout to the default?')) return;
+    state.company.bill = Object.assign({}, BILL_DEFAULTS);
     saveState(); render();
   });
 
@@ -4735,7 +4988,7 @@ function attachModalHandlers(){
   });
 
   const doPrintBtn = root.querySelector('[data-action="do-print"]');
-  if(doPrintBtn) doPrintBtn.addEventListener('click', ()=> window.print());
+  if(doPrintBtn) doPrintBtn.addEventListener('click', printWithA4Fit);
 
   const saveCustomerBtn = root.querySelector('[data-action="save-customer"]');
   if(saveCustomerBtn) saveCustomerBtn.addEventListener('click', ()=>{
