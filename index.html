@@ -246,7 +246,10 @@
   #gst-invoice .center{ text-align:center; }
   #gst-invoice .items-tbl th{ font-weight:700; font-size:10.5px; text-transform:none; background:#F4F2EA; }
   #gst-invoice .items-tbl td{ font-size:11px; }
-  #gst-invoice .desc-code{ font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:#444; font-style:italic; display:block; margin-top:2px;}
+  #gst-invoice .items-tbl tr.gi-tot td{ font-size:var(--tfs,11px); }
+  #gst-invoice .items-tbl tr.gi-grand td{ font-weight:var(--tfw,700); }
+  #gst-invoice .items-tbl tr.gi-item td{ font-size:var(--ifs,11px); font-weight:var(--ifw,400); }
+  #gst-invoice .desc-code{ font-family:'IBM Plex Mono',monospace; font-size:calc(var(--ifs,11px) - 1.5px); color:#444; font-style:italic; display:block; margin-top:2px;}
   #gst-invoice .gi-words{ padding:8px; border:1px solid #000; border-top:none; font-size:11.5px; }
   #gst-invoice .gi-words .lbl{ font-size:10px; color:#444; }
   #gst-invoice .gi-bottom{ display:flex; border:1px solid #000; border-top:none; }
@@ -1362,6 +1365,7 @@ body .tab2.active{ color:var(--accent); border-bottom-color:var(--accent); }
     </nav>
   </header>
   <div class="pagebar"><span id="mt-title">Dashboard</span><button type="button" id="pb-close" aria-label="Go to dashboard">X</button></div>
+  <div id="val-banner" style="display:none;flex:none;background:#fff4d6;color:#7a4b00;border-bottom:1px solid #f0c36d;padding:9px 20px;font-size:13.5px;font-weight:600;"></div>
   <div class="wrap">
     <section id="companies" aria-label="Company and period"></section>
     <main id="main"></main>
@@ -2270,8 +2274,13 @@ function gwRun(t){
    ========================================================= */
 function render(){
   if(isPlatformMode() && activeTab!=='platform' && activeTab!=='superadmins') activeTab = 'platform';
+  if(currentUser && !currentUser.superAdmin && currentUser.companyId){
+    const vco = platform.companies.find(c=>c.id===currentUser.companyId);
+    if(isValidityExpired(vco)){ alert('Your company validity has ended. Please contact your administrator to renew.'); const so = document.getElementById('signout-btn'); if(so){ so.click(); return; } }
+  }
   reconcileProductStocks();
   renderSidebar();
+  renderValidityBanner();
   const main = document.getElementById('main');
   // Preserve focus & cursor position across re-render: typing in a search/filter
   // box (or any input) re-renders the whole panel, which otherwise recreates the
@@ -2479,6 +2488,22 @@ function openBillDesigner(){
     <div class="modal-head"><h2>Adjust bill layout</h2><button class="modal-close" id="bd-x" type="button">&times;</button></div>
     <div class="desc" style="margin-bottom:4px;">Drag a blue bar up/down to resize a line, or the green &#10021; handle on a paragraph to move it. The red dashed line is the end of an A4 page. Then press <b>Save layout</b>.${real?'':' (Sample bill shown)'}</div>
     <div id="bd-a4" style="font-size:13px;font-weight:600;margin-bottom:8px;"></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#f1f5f9;border-radius:8px;">
+      <strong style="font-size:13px;">Item rows text:</strong>
+      <button class="btn sm" type="button" id="bd-f-minus">A&minus;</button>
+      <input type="number" id="bd-f-size" min="6" max="24" step="0.5" value="${draft.itemFontSize}" style="width:78px;min-height:32px;">
+      <span style="font-size:12px;color:var(--ink-soft);">px</span>
+      <button class="btn sm" type="button" id="bd-f-plus">A+</button>
+      <label class="bl-chk" style="margin:0 0 0 6px;"><input type="checkbox" id="bd-f-bold" ${draft.itemBold?'checked':''}> Bold</label>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:#f1f5f9;border-radius:8px;">
+      <strong style="font-size:13px;">Totals / Total row text:</strong>
+      <button class="btn sm" type="button" id="bd-t-minus">A&minus;</button>
+      <input type="number" id="bd-t-size" min="6" max="24" step="0.5" value="${draft.totalFontSize}" style="width:78px;min-height:32px;">
+      <span style="font-size:12px;color:var(--ink-soft);">px</span>
+      <button class="btn sm" type="button" id="bd-t-plus">A+</button>
+      <label class="bl-chk" style="margin:0 0 0 6px;"><input type="checkbox" id="bd-t-bold" ${draft.totalBold?'checked':''}> Total row bold</label>
+    </div>
     <div id="bd-wrap" style="overflow:hidden;position:relative;background:#fff;"><div id="bd-sheet" style="width:${FW}px;position:relative;transform-origin:0 0;">${gstInvoiceHtml(sale, cc)}</div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px;">
       <button class="btn ghost" type="button" id="bd-reset">Reset sizes &amp; positions</button>
@@ -2568,6 +2593,27 @@ function openBillDesigner(){
       h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
     });
   });
+  const applyItemFont = ()=>{
+    let f = Number(draft.itemFontSize); if(!isFinite(f)) f = 11; f = Math.max(6, Math.min(24, f)); draft.itemFontSize = f;
+    sheet.querySelectorAll('tr.gi-item').forEach(r=>{ r.style.setProperty('--ifs', f + 'px'); r.style.setProperty('--ifw', draft.itemBold ? 700 : 400); });
+    const si = root.querySelector('#bd-f-size'); if(si && document.activeElement!==si) si.value = f;
+    place();
+  };
+  root.querySelector('#bd-f-minus').addEventListener('click', ()=>{ draft.itemFontSize = (Number(draft.itemFontSize)||11) - 0.5; applyItemFont(); });
+  root.querySelector('#bd-f-plus').addEventListener('click', ()=>{ draft.itemFontSize = (Number(draft.itemFontSize)||11) + 0.5; applyItemFont(); });
+  root.querySelector('#bd-f-size').addEventListener('input', e=>{ draft.itemFontSize = Number(e.target.value); if(e.target.value!=='') applyItemFont(); });
+  root.querySelector('#bd-f-bold').addEventListener('change', e=>{ draft.itemBold = e.target.checked; applyItemFont(); });
+  const applyTotFont = ()=>{
+    let f = Number(draft.totalFontSize); if(!isFinite(f)) f = 11; f = Math.max(6, Math.min(24, f)); draft.totalFontSize = f;
+    const tb = sheet.querySelector('.items-tbl');
+    if(tb){ tb.style.setProperty('--tfs', f + 'px'); tb.style.setProperty('--tfw', draft.totalBold ? 700 : 400); }
+    const si = root.querySelector('#bd-t-size'); if(si && document.activeElement!==si) si.value = f;
+    place();
+  };
+  root.querySelector('#bd-t-minus').addEventListener('click', ()=>{ draft.totalFontSize = (Number(draft.totalFontSize)||11) - 0.5; applyTotFont(); });
+  root.querySelector('#bd-t-plus').addEventListener('click', ()=>{ draft.totalFontSize = (Number(draft.totalFontSize)||11) + 0.5; applyTotFont(); });
+  root.querySelector('#bd-t-size').addEventListener('input', e=>{ draft.totalFontSize = Number(e.target.value); if(e.target.value!=='') applyTotFont(); });
+  root.querySelector('#bd-t-bold').addEventListener('change', e=>{ draft.totalBold = e.target.checked; applyTotFont(); });
   place(); setTimeout(place, 200);
   const close = ()=>{ window.removeEventListener('resize', place); closeModal(); };
   window.addEventListener('resize', place);
@@ -2575,7 +2621,11 @@ function openBillDesigner(){
   root.querySelector('#bd-cancel').addEventListener('click', close);
   root.querySelector('#bd-reset').addEventListener('click', ()=>{
     Object.keys(LABELS).forEach(k=>{ draft[k] = BILL_DEFAULTS[k]; apply(k, BILL_DEFAULTS[k]); });
-    draft.moves = {}; Object.keys(mels).forEach(k=>{ mels[k].style.transform = ''; }); place();
+    draft.moves = {}; Object.keys(mels).forEach(k=>{ mels[k].style.transform = ''; });
+    draft.itemFontSize = BILL_DEFAULTS.itemFontSize; draft.itemBold = BILL_DEFAULTS.itemBold;
+    root.querySelector('#bd-f-size').value = draft.itemFontSize; root.querySelector('#bd-f-bold').checked = draft.itemBold; applyItemFont();
+    draft.totalFontSize = BILL_DEFAULTS.totalFontSize; draft.totalBold = BILL_DEFAULTS.totalBold;
+    root.querySelector('#bd-t-size').value = draft.totalFontSize; root.querySelector('#bd-t-bold').checked = draft.totalBold; applyTotFont();
   });
   root.querySelector('#bd-save').addEventListener('click', ()=>{
     if(!isAdmin()) return;
@@ -2631,6 +2681,8 @@ function viewCompany(){
         <div class="field"><label>Item area height</label><input type="number" min="0" max="600" id="bl-itemsHeight" value="${b.itemsHeight}"></div>
         <div class="field"><label>Buyer box height</label><input type="number" min="0" max="600" id="bl-buyerHeight" value="${b.buyerHeight}"></div>
         <div class="field"><label>Bottom box height</label><input type="number" min="0" max="600" id="bl-bottomHeight" value="${b.bottomHeight}"></div>
+        <div class="field"><label>Item letter size (px)</label><input type="number" min="6" max="24" step="0.5" id="bl-itemFontSize" value="${b.itemFontSize}"></div>
+        <div class="field"><label>Totals letter size (px)</label><input type="number" min="6" max="24" step="0.5" id="bl-totalFontSize" value="${b.totalFontSize}"></div>
       </div>
       <div class="bl-grid">
         <label class="bl-chk"><input type="checkbox" id="bl-fitA4" ${b.fitA4?'checked':''}> Fit whole bill on one A4 page when printing</label>
@@ -2639,6 +2691,8 @@ function viewCompany(){
         <label class="bl-chk"><input type="checkbox" id="bl-showHsnColumn" ${b.showHsnColumn?'checked':''}> HSN/SAC column</label>
         <label class="bl-chk"><input type="checkbox" id="bl-showDiscColumn" ${b.showDiscColumn?'checked':''}> Discount % column</label>
         <label class="bl-chk"><input type="checkbox" id="bl-showImei" ${b.showImei?'checked':''}> IMEI / Serial numbers</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-itemBold" ${b.itemBold?'checked':''}> Item rows in bold</label>
+        <label class="bl-chk"><input type="checkbox" id="bl-totalBold" ${b.totalBold?'checked':''}> Total row in bold</label>
         <label class="bl-chk"><input type="checkbox" id="bl-showAmountWords" ${b.showAmountWords?'checked':''}> Amount in words</label>
         <label class="bl-chk"><input type="checkbox" id="bl-showHsnSummary" ${b.showHsnSummary?'checked':''}> HSN-wise tax summary</label>
         <label class="bl-chk"><input type="checkbox" id="bl-showTaxWords" ${b.showTaxWords?'checked':''}> Tax amount in words</label>
@@ -3859,7 +3913,7 @@ const BILL_DEFAULTS = {
   itemsHeight:120, buyerHeight:0, bottomHeight:0,
   titleHeight:0, headerHeight:0, tableHeadHeight:0, itemRowHeight:0, subtotalHeight:0, cgstHeight:0, sgstHeight:0,
   discountHeight:0, roundHeight:0, totalHeight:0, wordsHeight:0, hsnHeadHeight:0, hsnRowHeight:0, taxWordsHeight:0,
-  jurisHeight:0, footerHeight:0,
+  jurisHeight:0, footerHeight:0, itemFontSize:11, itemBold:false, totalFontSize:11, totalBold:true,
   title:'TAX INVOICE', showLogo:true, showPaymentMode:false,
   showHsnColumn:true, showDiscColumn:true, showImei:true,
   showAmountWords:true, showHsnSummary:true, showTaxWords:true,
@@ -3873,6 +3927,7 @@ const BILL_HEIGHT_KEYS = Object.keys(BILL_DEFAULTS).filter(k=>/Height$/.test(k))
 function billCfg(c){
   const o = Object.assign({}, BILL_DEFAULTS, (c && c.bill) || {});
   o.moves = (o.moves && typeof o.moves==='object') ? o.moves : {};
+  { const f = Number(o.itemFontSize); o.itemFontSize = isFinite(f) && f>=6 ? Math.min(f,24) : 11; o.itemBold = !!o.itemBold; const t = Number(o.totalFontSize); o.totalFontSize = isFinite(t) && t>=6 ? Math.min(t,24) : 11; o.totalBold = !!o.totalBold; }
   BILL_HEIGHT_KEYS.forEach(k=>{ const n = Number(o[k]); o[k] = isFinite(n) && n>=0 ? Math.min(n,600) : BILL_DEFAULTS[k]; });
   return o;
 }
@@ -3943,7 +3998,7 @@ function gstInvoiceHtml(s, c){
       const imeis = it.imeiUnitIds.map(id=>{const u=(state.imeiUnits||[]).find(x=>x.id===id); return u?u.imei:'';}).filter(Boolean);
       if(bc.showImei && imeis.length) desc.push(`<span class="desc-code">IMEI/SL No.: ${esc(imeis.join(', '))}</span>`);
     } else if(bc.showImei && prod && prod.imei) desc.push(`<span class="desc-code">${esc(prod.imei)}</span>`);
-    return { hsn, row: `<tr class="gi-item" data-bl="itemRowHeight"${hr('itemRowHeight')}>
+    return { hsn, row: `<tr class="gi-item" data-bl="itemRowHeight" style="${bc.itemRowHeight?`height:${bc.itemRowHeight}px;`:''}--ifs:${bc.itemFontSize}px;--ifw:${bc.itemBold?700:400};">
         <td class="center">${i+1}</td>
         <td>${desc.join('')}</td>
         ${bc.showHsnColumn?`<td class="center">${esc(hsn)}</td>`:''}
@@ -4018,7 +4073,7 @@ function gstInvoiceHtml(s, c){
       </tr>
     </table>
 
-    <table class="gi-tbl items-tbl">
+    <table class="gi-tbl items-tbl" style="--tfs:${bc.totalFontSize}px;--tfw:${bc.totalBold?700:400};">
       <thead>
         <tr data-bl="tableHeadHeight"${hr('tableHeadHeight')}>
           <th style="width:5%;">Sl<br>No.</th>
@@ -4034,12 +4089,12 @@ function gstInvoiceHtml(s, c){
       <tbody>
         ${rows.map(r=>r.row).join('')}
         <tr><td colspan="${NC}" data-bl="itemsHeight" style="height:${bc.itemsHeight}px; border-left:1px solid #000; border-right:1px solid #000;">&nbsp;</td></tr>
-        <tr data-bl="subtotalHeight"${hr('subtotalHeight')}><td colspan="${NC-1}" style="text-align:right;">&nbsp;</td><td class="num">${money(taxableSum)}</td></tr>
-        <tr data-bl="cgstHeight"${hr('cgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">CGST</td><td class="num">${money(cgst)}</td></tr>
-        <tr data-bl="sgstHeight"${hr('sgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">SGST</td><td class="num">${money(sgst)}</td></tr>
-        ${discount>0?`<tr data-bl="discountHeight"${hr('discountHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">Less: Discount</td><td class="num">(-) ${money(discount)}</td></tr>`:''}
-        ${Math.abs(roundOff)>=0.005?`<tr data-bl="roundHeight"${hr('roundHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">Round Off</td><td class="num">${roundOff<0?'(-) ':''}${money(Math.abs(roundOff))}</td></tr>`:''}
-        <tr data-bl="totalHeight" style="font-weight:700;${bc.totalHeight?`height:${bc.totalHeight}px;`:''}">
+        <tr class="gi-tot" data-bl="subtotalHeight"${hr('subtotalHeight')}><td colspan="${NC-1}" style="text-align:right;">&nbsp;</td><td class="num">${money(taxableSum)}</td></tr>
+        <tr class="gi-tot" data-bl="cgstHeight"${hr('cgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">CGST</td><td class="num">${money(cgst)}</td></tr>
+        <tr class="gi-tot" data-bl="sgstHeight"${hr('sgstHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">SGST</td><td class="num">${money(sgst)}</td></tr>
+        ${discount>0?`<tr class="gi-tot" data-bl="discountHeight"${hr('discountHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">Less: Discount</td><td class="num">(-) ${money(discount)}</td></tr>`:''}
+        ${Math.abs(roundOff)>=0.005?`<tr class="gi-tot" data-bl="roundHeight"${hr('roundHeight')}><td colspan="${NC-1}" style="text-align:center; font-style:italic;">Round Off</td><td class="num">${roundOff<0?'(-) ':''}${money(Math.abs(roundOff))}</td></tr>`:''}
+        <tr class="gi-tot gi-grand" data-bl="totalHeight" style="${bc.totalHeight?`height:${bc.totalHeight}px;`:''}">
           <td style="border-top:1px solid #000;"></td>
           <td style="border-top:1px solid #000;">Total</td>
           ${bc.showHsnColumn?'<td style="border-top:1px solid #000;"></td>':''}
@@ -4183,7 +4238,8 @@ async function buildBillPdf(s, c){
   const useGst = !!(c.gst && c.gst.trim());
   const html = useGst ? gstInvoiceHtml(s, c) : plainInvoiceHtml(s, c);
   const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;width:' + (useGst?820:620) + 'px;z-index:-1;';
+  // Keep the sheet inside the page (not off-screen / fixed): Android Chrome renders off-screen fixed nodes as blank in html2canvas.
+  host.style.cssText = 'position:absolute;left:0;top:0;background:#fff;width:' + (useGst?820:620) + 'px;z-index:-1;pointer-events:none;';
   host.innerHTML = html;
   document.body.appendChild(host);
   try{
@@ -4191,7 +4247,13 @@ async function buildBillPdf(s, c){
     const el = host.firstElementChild;
     el.style.maxWidth = 'none';
     fitContentWidth(host, useGst?820:620);
-    const canvas = await window.html2canvas(el, { scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false });
+    // wait for images (logo / signature / seal) to finish decoding
+    await Promise.all([...host.querySelectorAll('img')].map(im=> (im.complete && im.naturalWidth) ? null : new Promise(r=>{ im.onload = im.onerror = r; setTimeout(r, 3000); })));
+    await new Promise(r=> requestAnimationFrame(()=> requestAnimationFrame(r)));
+    const BW = Math.max(useGst?820:620, host.scrollWidth), BH = Math.max(el.offsetHeight, host.scrollHeight);
+    let sc = 2; while(sc > 1 && BW*sc*BH*sc > 12000000) sc -= 0.25;   // stay under mobile canvas size limits
+    const canvas = await window.html2canvas(el, { scale:sc, backgroundColor:'#ffffff', useCORS:true, logging:false,
+      scrollX:0, scrollY:0, x:0, y:0, width:BW, height:BH, windowWidth:BW, windowHeight:BH });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
     const pageW = 210, pageH = 297, m = 8;
@@ -5189,6 +5251,59 @@ function backToPlatform(){
   resetState(); currentUser.companyId = null; activeTab = 'platform'; saveSession(); render();
 }
 function viewPlatformTab(){ return activeTab==='superadmins' ? viewSuperAdmins() : viewCompanies(); }
+/* ---- Company validity (set by super admin) ---- */
+function localISO(d){ d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+// whole days from today until the validity date (0 = last valid day, negative = expired); null = no expiry set
+function validityDaysLeft(co){
+  if(!co || !co.validUntil) return null;
+  const a = new Date(localISO() + 'T00:00:00'), b = new Date(co.validUntil + 'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+function isValidityExpired(co){ const d = validityDaysLeft(co); return d !== null && d < 0; }
+function validityPill(co){
+  const d = validityDaysLeft(co);
+  if(d === null) return '<span class="pill neutral">No expiry</span>';
+  if(d < 0) return '<span class="pill bad">Expired</span>';
+  if(d <= 7) return '<span class="pill" style="background:#fff0cf;color:#8a5200;">' + (d===0?'Ends today':d+' day'+(d===1?'':'s')+' left') + '</span>';
+  return '<span class="pill good">' + d + ' days left</span>';
+}
+function addMonthsISO(baseISO, months){
+  const d = new Date(baseISO + 'T00:00:00'); const day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + months);
+  const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  d.setDate(Math.min(day, last));
+  return localISO(d);
+}
+function validityModal(id){
+  const c = platform.companies.find(x=>x.id===id); if(!c) return;
+  formModal('Validity — ' + c.name, [
+    { id:'date', label:'Valid until (last day the company can sign in)', type:'date', val:c.validUntil||'' },
+    { id:'quick', label:'Or extend quickly (from the current validity date, or today if expired / not set)', type:'select', options:[['keep','Use the date above'],['1','+ 1 month'],['3','+ 3 months'],['6','+ 6 months'],['12','+ 1 year'],['none','Remove expiry (no limit)']] },
+  ], 'Save validity', async v=>{
+    let val = v.date || '';
+    if(v.quick === 'none') val = '';
+    else if(v.quick !== 'keep'){
+      const today = localISO();
+      const base = (c.validUntil && c.validUntil >= today) ? c.validUntil : today;
+      val = addMonthsISO(base, Number(v.quick));
+    }
+    await mutatePlatform(p=>{ const x = p.companies.find(y=>y.id===id); if(x){ if(val) x.validUntil = val; else delete x.validUntil; } });
+    closeModal(); render();
+  });
+}
+function renderValidityBanner(){
+  const el = document.getElementById('val-banner'); if(!el) return;
+  let msg = '';
+  if(currentUser && !currentUser.superAdmin && currentUser.companyId){
+    const co = platform.companies.find(c=>c.id===currentUser.companyId);
+    const d = validityDaysLeft(co);
+    if(d !== null && d >= 0 && d <= 7){
+      msg = '\u26A0\uFE0F Your company validity ends ' + (d===0 ? '<u>today</u>' : 'in <u>' + d + ' day' + (d===1?'':'s') + '</u>') + ' (' + fmtDate(co.validUntil) + '). Please contact your administrator to renew, or you will not be able to sign in.';
+    }
+  }
+  el.innerHTML = msg; el.style.display = msg ? 'block' : 'none';
+}
+
 function viewCompanies(){
   const list = [...platform.companies].sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
   const act = list.filter(c=>c.active!==false).length;
@@ -5201,14 +5316,16 @@ function viewCompanies(){
   <div class="kpis">${kpi('Companies',list.length)}${kpi('Active',act,'good')}${kpi('Suspended',list.length-act,'bad')}${kpi('Super admins',platform.superAdmins.length,'info')}</div>
   <div class="card">
     ${list.length===0 ? emptyState('No companies yet','Create the first company and its admin.') : `
-    <div style="overflow-x:auto;"><table><thead><tr><th>Company</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>
+    <div style="overflow-x:auto;"><table><thead><tr><th>Company</th><th>Status</th><th>Validity</th><th>Created</th><th></th></tr></thead><tbody>
     ${list.map(c=>{ const on = c.active!==false; return `
       <tr>
         <td><div style="display:flex;align-items:center;gap:10px;"><span class="avatar">${esc((c.name||'?')[0].toUpperCase())}</span><strong>${esc(c.name)}</strong></div></td>
         <td><span class="pill ${on?'good':'bad'}">${on?'Active':'Suspended'}</span></td>
+        <td>${validityPill(c)}${c.validUntil?`<div style="font-size:11px;color:var(--ink-soft);margin-top:3px;">till ${fmtDate(c.validUntil)}</div>`:''}</td>
         <td>${c.createdAt?fmtDate(c.createdAt):'-'}</td>
         <td style="text-align:right;white-space:nowrap;">
           <button class="btn sm" data-pa="admins" data-id="${esc(c.id)}">Users &amp; admins</button>
+          <button class="btn sm" data-pa="validity" data-id="${esc(c.id)}">Validity</button>
           <button class="btn sm" data-pa="open" data-id="${esc(c.id)}">Open</button>
           <button class="btn sm ${on?'danger':''}" data-pa="toggle" data-id="${esc(c.id)}">${on?'Suspend':'Activate'}</button>
         </td>
@@ -5243,7 +5360,7 @@ function formModal(title, fields, submitLabel, onSubmit){
     <div class="login-error" id="fm-err"></div>
     ${fields.map(f=> f.type==='select'
       ? `<div class="field"><label>${f.label}</label><select id="fm-${f.id}">${f.options.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select></div>`
-      : `<div class="field"><label>${f.label}</label><input type="${f.type||'text'}" id="fm-${f.id}" placeholder="${esc(f.ph||'')}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>`).join('')}
+      : `<div class="field"><label>${f.label}</label><input type="${f.type||'text'}" id="fm-${f.id}" value="${esc(f.val||'')}" placeholder="${esc(f.ph||'')}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>`).join('')}
     <div style="text-align:right;margin-top:8px;"><button class="btn ghost" data-close="modal">Cancel</button> <button class="btn primary" id="fm-go">${esc(submitLabel)}</button></div>
   </div></div>`);
   const err = document.getElementById('fm-err'), go = document.getElementById('fm-go');
@@ -5266,6 +5383,7 @@ function newCompanyModal(){
     { id:'name', label:'Company name', ph:'e.g. Sharma Mobiles' },
     { id:'user', label:'Company admin username', ph:'e.g. sharma' },
     { id:'pw', label:'Company admin password', ph:`Min ${MIN_PW} characters` },
+    { id:'valid', label:'Valid until (optional — leave empty for no expiry)', type:'date' },
   ], 'Create Company', async v=>{
     const name = v.name.trim(), user = v.user.trim();
     if(!name) throw new Error('Enter the company name.');
@@ -5280,7 +5398,7 @@ function newCompanyModal(){
       st.company.name = name;
       st.users = [{ username:user, passHash: await hashPw(id, user, v.pw), role:'admin', owner:true, createdAt:todayISO(), createdBy:currentUser.username }];
       await setDoc(companyRef(id), st);
-      await mutatePlatform(p=>p.companies.push({ id, name, createdAt:todayISO(), active:true, createdBy:currentUser.username }));
+      await mutatePlatform(p=>p.companies.push(Object.assign({ id, name, createdAt:todayISO(), active:true, createdBy:currentUser.username }, v.valid ? { validUntil:v.valid } : {})));
     }catch(e){ releaseUsername(user, id); throw e; }
     closeModal(); render();
   });
@@ -5392,6 +5510,7 @@ async function handleConsoleClick(e){
     if(a==='new-company') newCompanyModal();
     else if(a==='admins') adminsModal(id);
     else if(a==='open') openCompanyAsSuper(id);
+    else if(a==='validity') validityModal(id);
     else if(a==='toggle'){
       const c = platform.companies.find(x=>x.id===id); if(!c) return;
       const on = c.active!==false;
@@ -5489,6 +5608,7 @@ async function handleConsoleClick(e){
       const co = platform.companies.find(c=>c.id===hit.id);
       if(!co){ showError(bad); return; }
       if(co.active === false){ showError('This company is suspended. Please contact your platform administrator.'); return; }
+      if(isValidityExpired(co)){ showError('This company\'s validity ended on ' + fmtDate(co.validUntil) + '. Please contact your platform administrator to renew.'); return; }
       if(!(await loadCompany(hit.id))){ showError(fbError ? 'Could not load company data: '+fbError : bad); return; }
       const rec = await checkUser(state.users, hit.id, username, password);
       if(!rec){ resetState(); showError(bad); return; }
@@ -5524,7 +5644,7 @@ async function handleConsoleClick(e){
           else if(rec && await loadCompany(sess.c)){ signIn(rec, true, sess.c); restored = true; }
         }else{
           const co = platform.companies.find(c=>c.id===sess.c);
-          if(co && co.active!==false && await loadCompany(sess.c)){
+          if(co && co.active!==false && !isValidityExpired(co) && await loadCompany(sess.c)){
             const rec = state.users.find(u=>tokOf(u)===sess.t);
             if(rec){ signIn(rec, false, sess.c); restored = true; } else resetState();
           }
