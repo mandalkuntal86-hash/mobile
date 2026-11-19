@@ -4477,6 +4477,7 @@ async function saveBillSnapshot(s, c){
     sig: billSigOf(s)
   };
   const clean = JSON.parse(JSON.stringify(snap));   // drops undefined (Firestore rejects it)
+  if(location.protocol === 'file:') throw new Error('Open the app from its hosted web address (not a local file) so the link works for customers.');
   const task = setDoc(doc(db, 'publicBills', rnd), clean);
   const timeout = new Promise((_,rej)=> setTimeout(()=>rej(new Error('Timed out. Check internet / Firestore rules.')), 20000));
   await Promise.race([task, timeout]);
@@ -4568,49 +4569,58 @@ async function sendBillWhatsApp(saleId){
   root.querySelector('#wa-x').onclick = close;
   root.querySelector('.modal-bg').addEventListener('click', e=>{ if(e.target.classList.contains('modal-bg')) close(); });
 
-  body.innerHTML = '<p style="margin:14px 0;">Opening WhatsApp for <strong>' + esc(s.customer||'customer') + '</strong> — bill <strong>' + esc(s.invoiceNo) + '</strong>…</p>';
-  let blob, url = '', upErr = '';
-  try{ blob = await buildBillPdf(s, c); }
-  catch(e){ body.innerHTML = '<p style="color:var(--bad);">Could not create PDF: ' + esc(e.message||e) + '</p>'; return; }
-  body.innerHTML = '<p style="margin:14px 0;">Creating bill link…</p>';
+  body.innerHTML = '<p style="margin:14px 0;">Creating bill link for <strong>' + esc(s.customer||'customer') + '</strong> — bill <strong>' + esc(s.invoiceNo) + '</strong>…</p>';
+  // 1) Create the link FIRST (fast). The PDF is no longer built before this, so a slow/failed PDF can never block the WhatsApp message.
+  let url = '', upErr = '';
   try{ url = await saveBillSnapshot(s, c); }
   catch(e){ upErr = (e && e.message) ? e.message : String(e); }
 
-  if(waWin && !upErr && url){
-    waWin.location.href = 'https://wa.me/' + autoDigits + '?text=' + encodeURIComponent(billWaText(s, c, url));
-    root.remove();
-    return;
-  }
-  if(waWin){ try{ waWin.close(); }catch(e){} }
+  // 2) Build the PDF in the background (only needed for Download / Share buttons)
+  let pdfErr = '';
+  const blobP = buildBillPdf(s, c).catch(e=>{ pdfErr = (e && e.message) ? e.message : String(e); return null; });
+
+  // 3) Point the pre-opened tab at WhatsApp
+  let opened = false;
+  if(waWin && url && !upErr){
+    try{ waWin.location.href = 'https://wa.me/' + autoDigits + '?text=' + encodeURIComponent(billWaText(s, c, url)); opened = true; }
+    catch(e){ try{ waWin.close(); }catch(_){} }
+  } else if(waWin){ try{ waWin.close(); }catch(e){} }
+
   const fileName = String(s.invoiceNo||'bill') + '.pdf';
-  const canShareFile = !!(navigator.canShare && navigator.canShare({ files:[new File([blob], fileName, { type:'application/pdf' })] }));
   body.innerHTML =
-    (upErr ? '<div style="background:var(--bad-bg);color:var(--bad);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-bottom:10px;">Bill link could not be created (' + esc(upErr) + '). The message below has no link — use “Download PDF” and attach it in WhatsApp.</div>'
-           : '<div style="background:var(--good-bg);color:var(--good);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-bottom:10px;">Bill link created. The customer opens it and taps “Download PDF”.</div>') +
+    (upErr ? '<div style="background:var(--bad-bg);color:var(--bad);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-bottom:10px;">Bill link could not be created (' + esc(upErr) + '). The message below has no link — use “Download PDF” and attach it in WhatsApp.<br><small>If it says “permission”, set the Firestore rule: <code>match /publicBills/{id} { allow read: if true; allow create: if request.auth != null; }</code></small></div>'
+           : (opened ? '<div style="background:var(--good-bg);color:var(--good);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-bottom:10px;">Bill link created and WhatsApp opened. If WhatsApp did not open, tap “Open WhatsApp” below.</div>'
+                     : '<div style="background:var(--good-bg);color:var(--good);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-bottom:10px;">Bill link created. Tap “Open WhatsApp” to send it.</div>')) +
     '<div class="field"><label>Customer WhatsApp number</label><input type="tel" id="wa-phone" placeholder="10-digit mobile (91 is added automatically)" value="' + esc(custPhone) + '"></div>' +
     '<div class="field"><label>Message</label><textarea id="wa-msg" rows="10" style="font-size:12.5px;"></textarea></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
       '<a class="btn primary" id="wa-go" target="_blank" rel="noopener" style="text-decoration:none;">Open WhatsApp</a>' +
       '<button class="btn" id="wa-dl" type="button">Download PDF</button>' +
-      (canShareFile ? '<button class="btn" id="wa-share" type="button">Share PDF file</button>' : '') +
+      ((navigator.share && navigator.canShare) ? '<button class="btn" id="wa-share" type="button">Share PDF file</button>' : '') +
       (url ? '<button class="btn" id="wa-copy" type="button">Copy link</button>' : '') +
     '</div>';
   const phoneInp = body.querySelector('#wa-phone'), msgInp = body.querySelector('#wa-msg'), go = body.querySelector('#wa-go');
   msgInp.value = billWaText(s, c, url);
   const refresh = ()=>{
     const d = waDigits(phoneInp.value);
-    go.href = 'https://wa.me/' + d + '?text=' + encodeURIComponent(msgInp.value);
+    go.href = 'https://wa.me/' + (d.length>=10 ? d : '') + '?text=' + encodeURIComponent(msgInp.value);
   };
   phoneInp.addEventListener('input', refresh);
   msgInp.addEventListener('input', refresh);
   refresh();
-  body.querySelector('#wa-dl').onclick = ()=>{
+  body.querySelector('#wa-dl').onclick = async()=>{
+    const blob = await blobP;
+    if(!blob){ alert('Could not create PDF: ' + (pdfErr || 'unknown error')); return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
   };
   const shareBtn = body.querySelector('#wa-share');
   if(shareBtn) shareBtn.onclick = async()=>{
-    try{ await navigator.share({ files:[new File([blob], fileName, { type:'application/pdf' })], text: msgInp.value }); }catch(e){}
+    const blob = await blobP;
+    if(!blob){ alert('Could not create PDF: ' + (pdfErr || 'unknown error')); return; }
+    const f = new File([blob], fileName, { type:'application/pdf' });
+    if(!navigator.canShare({ files:[f] })){ alert('This browser cannot share files. Use Download PDF instead.'); return; }
+    try{ await navigator.share({ files:[f], text: msgInp.value }); }catch(e){}
   };
   const copyBtn = body.querySelector('#wa-copy');
   if(copyBtn) copyBtn.onclick = async()=>{
